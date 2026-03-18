@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Users, FileCheck, Download, Globe, Zap, Loader2 } from 'lucide-react';
 
 const NAMESPACE = 'gml_generator_v1_live'; // Unique namespace for the app
-const BASE_API_URL = import.meta.env.DEV ? '/counterapi' : 'https://api.counterapi.dev';
+const BASE_API_URL = '/counterapi';
 
 const Statistics = ({ localStats }) => {
   const [onlineStats, setOnlineStats] = useState({
