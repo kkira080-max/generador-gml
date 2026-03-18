@@ -20,7 +20,7 @@ const Statistics = ({ localStats }) => {
       const endpoints = ['visits', 'conversions', 'downloads'];
       const results = await Promise.all(
         endpoints.map(id => 
-          fetch(`${BASE_API_URL}/v1/${NAMESPACE}/${id}`)
+          fetch(`${BASE_API_URL}/v1/${NAMESPACE}/${id}/`)
             .then(res => res.json())
             .catch(() => ({ count: 0 }))
         )

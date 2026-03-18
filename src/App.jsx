@@ -49,14 +49,14 @@ function App() {
     
     // Real online sync
     const baseApi = '/counterapi';
-    fetch(`${baseApi}/v1/gml_generator_v1_live/visits/up`).catch(() => {});
+    fetch(`${baseApi}/v1/gml_generator_v1_live/visits/up/`).catch(() => {});
   }, []);
 
   const incrementStat = (type) => {
     setStats(prev => ({ ...prev, [type]: prev[type] + 1 }));
     // Real online sync
     const baseApi = '/counterapi';
-    fetch(`${baseApi}/v1/gml_generator_v1_live/${type}/up`).catch(() => {});
+    fetch(`${baseApi}/v1/gml_generator_v1_live/${type}/up/`).catch(() => {});
   };
   // -------------------------
 
