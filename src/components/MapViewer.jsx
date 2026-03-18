@@ -75,25 +75,6 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
       maxZoom: 24,
     });
 
-    const registroInscritasLayer = L.tileLayer.wms('/registros/cartografia/wms', {
-      layers: 'PwvgDB:geoinscripciones',
-      format: 'image/png',
-      transparent: true,
-      version: '1.1.1',
-      attribution: 'Geoportal Registradores de España',
-      maxNativeZoom: 19,
-      maxZoom: 24,
-    });
-
-    const registroPendientesLayer = L.tileLayer.wms('/registros/cartografia/wms', {
-      layers: 'PwvgDB:geopresentaciones',
-      format: 'image/png',
-      transparent: true,
-      version: '1.1.1',
-      attribution: 'Geoportal Registradores de España',
-      maxNativeZoom: 19,
-      maxZoom: 24,
-    });
 
     defaultLayer.addTo(initialMap);
 
@@ -106,8 +87,6 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
 
     const overlayMaps = {
       "Catastro Oficial": catastroLayer,
-      "🏠 Registro: Inscritas": registroInscritasLayer,
-      "📋 Registro: Pendientes": registroPendientesLayer,
     };
 
 
