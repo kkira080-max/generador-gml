@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Users, FileCheck, Download, Globe, Zap, Loader2 } from 'lucide-react';
 
-const NAMESPACE = 'gml_generator_v1_live'; // Unique namespace for the app
+const NAMESPACE = 'generador_gml_v1_0'; // Unique namespace for the app
 const BASE_API_URL = 'https://api.counterapi.dev';
 
 export default function Statistics({ localStats }) {
@@ -12,6 +12,7 @@ export default function Statistics({ localStats }) {
   // Function to fetch all online stats
   const fetchOnlineStats = async () => {
     setLoadingOnline(true);
+    console.log("Cargando estadísticas online para:", NAMESPACE);
     try {
       const endpoints = ['visits', 'conversions', 'downloads'];
       const timestamp = Date.now();
