@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    {
+      "source": "/catastro/(.*)",
+      "destination": "https://ovc.catastro.meh.es/$1"
+    },
+    {
+      "source": "/counterapi/(.*)",
+      "destination": "https://api.counterapi.dev/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
