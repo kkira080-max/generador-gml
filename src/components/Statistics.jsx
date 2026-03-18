@@ -1,25 +1,37 @@
 import React, { useState, useEffect } from 'react';
-import { Users, FileCheck, Download, Globe, Zap, Loader2 } from 'lucide-react';
+import { Users, FileCheck, Download, Globe, Zap, Loader2, RefreshCw } from 'lucide-react';
+import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale } from 'chart.js';
+import { Doughnut } from 'react-chartjs-2';
 
-const NAMESPACE = 'generador_gml_v1_0'; // Unique namespace for the app
+// Register ChartJS components
+ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale);
+
+const NAMESPACE = 'gml_final_stats_v1';
 const BASE_API_URL = 'https://api.counterapi.dev';
 
 export default function Statistics({ localStats }) {
   const [onlineStats, setOnlineStats] = useState({ visits: 0, conversions: 0, downloads: 0 });
   const [loadingOnline, setLoadingOnline] = useState(false);
   const [activeTab, setActiveTab] = useState('local');
+  const [errorSync, setErrorSync] = useState(false);
 
-  // Function to fetch all online stats
+  // Fetch online stats
   const fetchOnlineStats = async () => {
     setLoadingOnline(true);
-    console.log("Cargando estadísticas online para:", NAMESPACE);
+    setErrorSync(false);
+    console.log("Sincronizando con CounterAPI:", NAMESPACE);
+    
     try {
       const endpoints = ['visits', 'conversions', 'downloads'];
       const timestamp = Date.now();
+      
       const results = await Promise.all(
         endpoints.map(id => 
           fetch(`${BASE_API_URL}/v1/${NAMESPACE}/${id}/?t=${timestamp}`)
-            .then(res => res.json())
+            .then(res => {
+              if (!res.ok) throw new Error("API status " + res.status);
+              return res.json();
+            })
             .catch(() => ({ count: 0 }))
         )
       );
@@ -30,191 +42,167 @@ export default function Statistics({ localStats }) {
         downloads: results[2].count || 0
       });
     } catch (error) {
-      console.error("Error fetching online stats:", error);
+      console.error("Error en sincronización online:", error);
+      setErrorSync(true);
     } finally {
       setLoadingOnline(false);
     }
   };
 
-  // Initial fetch and periodic refresh for "Mundial" tab
   useEffect(() => {
-    fetchOnlineStats();
-    const interval = setInterval(() => {
-      if (activeTab === 'online') fetchOnlineStats();
-    }, 15000); // Refresh every 15s when active
-
-    return () => clearInterval(interval);
+    if (activeTab === 'online') {
+      fetchOnlineStats();
+    }
   }, [activeTab]);
 
-  const statsToShow = activeTab === 'local' ? localStats : onlineStats;
+  // Chart Data
+  const currentStats = activeTab === 'local' ? localStats : onlineStats;
+  
+  const chartData = {
+    labels: ['Visitas', 'GMLs', 'Descargas'],
+    datasets: [{
+      data: [currentStats.visits, currentStats.conversions, currentStats.downloads],
+      backgroundColor: ['#B6C88D', '#00ff9d', '#6B8E23'],
+      borderColor: 'rgba(0,0,0,0.1)',
+      borderWidth: 1,
+      hoverOffset: 15
+    }]
+  };
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    cutout: '70%',
+    plugins: {
+      legend: {
+        display: false
+      },
+      tooltip: {
+        callbacks: {
+          label: (context) => ` ${context.label}: ${context.raw}`
+        }
+      }
+    }
+  };
 
   return (
-    <div className="statistics-container glass-card" style={{
-      marginTop: '20px',
-      padding: '16px',
-      background: 'rgba(255, 255, 255, 0.03)',
-      border: '1px solid rgba(255, 255, 255, 0.1)',
-      borderRadius: '16px',
-      boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
-      backdropFilter: 'blur(4px)',
-    }}>
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '12px',
-        marginBottom: '16px'
-      }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between'
-        }}>
-          <h3 style={{
-            fontSize: '0.9rem',
-            fontWeight: 'bold',
-            color: 'var(--accent-primary)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            textTransform: 'uppercase',
-            letterSpacing: '0.1em'
-          }}>
-            <Zap size={16} className="pulse-slow" /> Estadísticas
-          </h3>
-          
+    <div className="statistics-section glass-card" style={{ padding: '20px', marginBottom: '20px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8, fontSize: '1rem', color: 'var(--text-primary)' }}>
+          <Zap size={18} className="pulse-indicator" style={{ color: 'var(--accent-primary)' }} />
+          ESTADÍSTICAS
+        </h3>
+        
+        <div className="stats-toggle" style={{ display: 'flex', background: 'rgba(255,255,255,0.05)', borderRadius: '20px', padding: '2px' }}>
+          <button 
+            className={`toggle-btn ${activeTab === 'local' ? 'active' : ''}`}
+            onClick={() => setActiveTab('local')}
+          >
+            TUYAS
+          </button>
+          <button 
+            className={`toggle-btn ${activeTab === 'online' ? 'active' : ''}`}
+            onClick={() => setActiveTab('online')}
+          >
+            GLOBAL
+          </button>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+        {/* Chart Container */}
+        <div style={{ position: 'relative', width: '120px', height: '120px', flexShrink: 0 }}>
+          <Doughnut data={chartData} options={chartOptions} />
           <div style={{
-            display: 'flex',
-            background: 'rgba(0,0,0,0.3)',
-            borderRadius: '20px',
-            padding: '2px',
-            border: '1px solid rgba(255,255,255,0.05)'
+            position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+            textAlign: 'center'
           }}>
-            <button 
-              onClick={() => setActiveTab('local')}
-              style={{
-                padding: '4px 10px',
-                borderRadius: '18px',
-                fontSize: '0.6rem',
-                fontWeight: 'bold',
-                border: 'none',
-                cursor: 'pointer',
-                background: activeTab === 'local' ? 'var(--accent-primary)' : 'transparent',
-                color: activeTab === 'local' ? '#000' : 'var(--text-secondary)',
-                transition: 'all 0.3s ease',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              TUYAS
-            </button>
-            <button 
-              onClick={() => setActiveTab('online')}
-              style={{
-                padding: '4px 10px',
-                borderRadius: '18px',
-                fontSize: '0.6rem',
-                fontWeight: 'bold',
-                border: 'none',
-                cursor: 'pointer',
-                background: activeTab === 'online' ? 'var(--accent-secondary)' : 'transparent',
-                color: activeTab === 'online' ? '#000' : 'var(--text-secondary)',
-                transition: 'all 0.3s ease',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              ONLINE
-            </button>
+            <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--accent-primary)' }}>
+              {currentStats.visits + currentStats.conversions + currentStats.downloads}
+            </span>
+            <div style={{ fontSize: '0.5rem', textTransform: 'uppercase', opacity: 0.6 }}>Total</div>
+          </div>
+        </div>
+
+        {/* Legend / Metrics */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div className="metric-row">
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#B6C88D' }}></div>
+            <span className="metric-label">Visitas</span>
+            <span className="metric-value">{currentStats.visits}</span>
+          </div>
+          <div className="metric-row">
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#00ff9d' }}></div>
+            <span className="metric-label">GMLs</span>
+            <span className="metric-value">{currentStats.conversions}</span>
+          </div>
+          <div className="metric-row">
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#6B8E23' }}></div>
+            <span className="metric-label">Descargas</span>
+            <span className="metric-value">{currentStats.downloads}</span>
           </div>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', position: 'relative' }}>
-        {loadingOnline && activeTab === 'online' && (
-          <div style={{
-            position: 'absolute',
-            inset: 0,
-            background: 'rgba(0,0,0,0.2)',
-            zIndex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderRadius: '12px'
-          }}>
-            <Loader2 className="animate-spin" size={24} color="var(--accent-primary)" />
-          </div>
-        )}
-        <StatCard 
-          icon={<Users size={16} />} 
-          label="Visitas" 
-          value={statsToShow.visits} 
-          color="var(--accent-primary)" 
-        />
-        <StatCard 
-          icon={<FileCheck size={16} />} 
-          label="GMLs" 
-          value={statsToShow.conversions} 
-          color="var(--accent-secondary)" 
-        />
-        <StatCard 
-          icon={<Download size={16} />} 
-          label="Descarga" 
-          value={statsToShow.downloads} 
-          color="#f59e0b" 
-        />
-      </div>
-
-      <div style={{ 
-        marginTop: '12px', 
-        fontSize: '0.6rem', 
-        color: 'var(--text-secondary)', 
-        textAlign: 'center',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '4px',
-        opacity: 0.6
-      }}>
-        {activeTab === 'online' ? (
-          <><Globe size={10} className="animate-spin-slow" /> Sincronizado con el servidor global</>
-        ) : (
-          <>Datos guardados localmente en tu equipo</>
-        )}
-      </div>
+      {activeTab === 'online' && (
+        <div style={{ marginTop: '15px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.05)', textAlign: 'center' }}>
+          {loadingOnline ? (
+            <div style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, color: 'var(--text-secondary)' }}>
+              <Loader2 size={12} className="animate-spin" /> Sincronizando datos...
+            </div>
+          ) : (
+            <button 
+              onClick={fetchOnlineStats}
+              style={{ background: 'none', border: 'none', color: 'var(--accent-primary)', fontSize: '0.65rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, margin: '0 auto' }}
+            >
+              <RefreshCw size={10} /> Actualizar ahora
+            </button>
+          )}
+          {errorSync && (
+            <div style={{ fontSize: '0.6rem', color: '#ff4d4d', marginTop: 4 }}>
+              * Error de conexión. Revisa tu AdBlock o refresca.
+            </div>
+          )}
+        </div>
+      )}
+      
+      <style jsx="true">{`
+        .statistics-section {
+          background: rgba(255, 255, 255, 0.03) !important;
+          border: 1px solid rgba(255, 255, 255, 0.1) !important;
+          box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3) !important;
+        }
+        .toggle-btn {
+          padding: 6px 14px;
+          border: none;
+          background: none;
+          color: var(--text-secondary);
+          font-size: 0.7rem;
+          font-weight: bold;
+          cursor: pointer;
+          border-radius: 18px;
+          transition: all 0.2s ease;
+        }
+        .toggle-btn.active {
+          background: var(--accent-primary);
+          color: #000;
+        }
+        .metric-row {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-size: 0.8rem;
+        }
+        .metric-label {
+          color: var(--text-secondary);
+          flex: 1;
+        }
+        .metric-value {
+          font-weight: bold;
+          font-family: monospace;
+          color: var(--text-primary);
+        }
+      `}</style>
     </div>
   );
-};
-
-const StatCard = ({ icon, label, value, color }) => (
-  <div style={{
-    background: 'rgba(0,0,0,0.4)',
-    padding: '10px 4px',
-    borderRadius: '12px',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '6px',
-    border: `1px solid ${color}33`,
-    transition: 'transform 0.2s ease',
-    cursor: 'default',
-    minWidth: 0
-  }}
-  onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-  onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
-  >
-    <div style={{ color: color }}>{icon}</div>
-    <div style={{ 
-      fontSize: '1.1rem', 
-      fontWeight: '800', 
-      color: '#fff', 
-      fontFamily: 'monospace',
-      overflow: 'hidden',
-      textOverflow: 'ellipsis',
-      maxWidth: '100%'
-    }}>
-      {value.toLocaleString()}
-    </div>
-    <div style={{ fontSize: '0.52rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-      {label}
-    </div>
-  </div>
-);
-
+}

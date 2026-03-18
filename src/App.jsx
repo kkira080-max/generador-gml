@@ -49,16 +49,16 @@ function App() {
     
     // Real online sync
     const baseApi = 'https://api.counterapi.dev';
-    const namespace = 'generador_gml_v1_0';
-    fetch(`${baseApi}/v1/${namespace}/visits/up/`).then(() => console.log('Visita online sincronizada')).catch(() => {});
+    const namespace = 'gml_final_stats_v1';
+    fetch(`${baseApi}/v1/${namespace}/visits/up/`).catch(() => {});
   }, []);
 
   const incrementStat = (type) => {
     setStats(prev => ({ ...prev, [type]: prev[type] + 1 }));
     // Real online sync
     const baseApi = 'https://api.counterapi.dev';
-    const namespace = 'generador_gml_v1_0';
-    fetch(`${baseApi}/v1/${namespace}/${type}/up/`).then(() => console.log(`Evento ${type} online sincronizado`)).catch(() => {});
+    const namespace = 'gml_final_stats_v1';
+    fetch(`${baseApi}/v1/${namespace}/${type}/up/`).catch(() => {});
   };
   // -------------------------
 
