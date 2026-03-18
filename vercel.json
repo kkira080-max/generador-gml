@@ -9,6 +9,10 @@
       "destination": "https://api.counterapi.dev/$1"
     },
     {
+      "source": "/registros/(.*)",
+      "destination": "https://geoportal.registradores.org/$1"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

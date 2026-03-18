@@ -75,7 +75,7 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
       maxZoom: 24,
     });
 
-    const registroInscritasLayer = L.tileLayer.wms('https://geoportal.registradores.org/cartografia/wms', {
+    const registroInscritasLayer = L.tileLayer.wms('/registros/cartografia/wms', {
       layers: 'PwvgDB:geoinscripciones',
       format: 'image/png',
       transparent: true,
@@ -85,7 +85,7 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
       maxZoom: 24,
     });
 
-    const registroPendientesLayer = L.tileLayer.wms('https://geoportal.registradores.org/cartografia/wms', {
+    const registroPendientesLayer = L.tileLayer.wms('/registros/cartografia/wms', {
       layers: 'PwvgDB:geopresentaciones',
       format: 'image/png',
       transparent: true,
