@@ -48,14 +48,14 @@ function App() {
     setStats(prev => ({ ...prev, visits: prev.visits + 1 }));
     
     // Real online sync
-    const baseApi = '/counterapi';
+    const baseApi = 'https://api.counterapi.dev';
     fetch(`${baseApi}/v1/gml_generator_v1_live/visits/up/`).catch(() => {});
   }, []);
 
   const incrementStat = (type) => {
     setStats(prev => ({ ...prev, [type]: prev[type] + 1 }));
     // Real online sync
-    const baseApi = '/counterapi';
+    const baseApi = 'https://api.counterapi.dev';
     fetch(`${baseApi}/v1/gml_generator_v1_live/${type}/up/`).catch(() => {});
   };
   // -------------------------

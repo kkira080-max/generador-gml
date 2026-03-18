@@ -2,25 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { Users, FileCheck, Download, Globe, Zap, Loader2 } from 'lucide-react';
 
 const NAMESPACE = 'gml_generator_v1_live'; // Unique namespace for the app
-const BASE_API_URL = '/counterapi';
+const BASE_API_URL = 'https://api.counterapi.dev';
 
-const Statistics = ({ localStats }) => {
-  const [onlineStats, setOnlineStats] = useState({
-    visits: 0,
-    conversions: 0,
-    downloads: 0
-  });
-  const [loadingOnline, setLoadingOnline] = useState(false);
-  const [activeTab, setActiveTab] = useState('local');
+export default function Statistics({ localStats }) {
+  const [onlineStats, setOnlineStats] = useState({ visits: 0, conversions: 0, downloads: 0 });
+  const [mode, setMode] = useState('local'); // 'local' or 'online'
+  const [loading, setLoading] = useState(false);
 
   // Function to fetch all online stats
   const fetchOnlineStats = async () => {
-    setLoadingOnline(true);
+    setLoading(true);
     try {
       const endpoints = ['visits', 'conversions', 'downloads'];
+      const timestamp = Date.now();
       const results = await Promise.all(
         endpoints.map(id => 
-          fetch(`${BASE_API_URL}/v1/${NAMESPACE}/${id}/`)
+          fetch(`${BASE_API_URL}/v1/${NAMESPACE}/${id}/?t=${timestamp}`)
             .then(res => res.json())
             .catch(() => ({ count: 0 }))
         )
