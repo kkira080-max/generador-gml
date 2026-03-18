@@ -17,12 +17,6 @@ export default defineConfig({
           'Origin': 'https://ovc.catastro.meh.es',
           'Referer': 'https://ovc.catastro.meh.es/'
         }
-      },
-      '/counterapi': {
-        target: 'https://api.counterapi.dev',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/counterapi/, ''),
-        secure: false
       }
     }
   }
