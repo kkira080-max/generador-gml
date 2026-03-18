@@ -6,12 +6,12 @@ const BASE_API_URL = 'https://api.counterapi.dev';
 
 export default function Statistics({ localStats }) {
   const [onlineStats, setOnlineStats] = useState({ visits: 0, conversions: 0, downloads: 0 });
-  const [mode, setMode] = useState('local'); // 'local' or 'online'
-  const [loading, setLoading] = useState(false);
+  const [loadingOnline, setLoadingOnline] = useState(false);
+  const [activeTab, setActiveTab] = useState('local');
 
   // Function to fetch all online stats
   const fetchOnlineStats = async () => {
-    setLoading(true);
+    setLoadingOnline(true);
     try {
       const endpoints = ['visits', 'conversions', 'downloads'];
       const timestamp = Date.now();
@@ -217,4 +217,3 @@ const StatCard = ({ icon, label, value, color }) => (
   </div>
 );
 
-export default Statistics;
