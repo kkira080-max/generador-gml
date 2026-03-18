@@ -1,0 +1,1312 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;800&display=swap');
+@import "leaflet/dist/leaflet.css";
+
+:root {
+  /* High-End Professional UI (Slate & Zinc) */
+  --bg-base: #020617;        /* Slate 950 */
+  --bg-panel: rgba(24, 24, 27, 0.7); /* Zinc 900 with alpha */
+  --bg-input: rgba(39, 39, 42, 0.6); /* Zinc 800 with alpha */
+  
+  --text-primary: #f8fafc;   /* Slate 50 */
+  --text-secondary: #94a3b8; /* Slate 400 */
+  
+  --accent-primary: #38bdf8; /* Sky 400 (Professional Tech Cyan) */
+  --accent-primary-rgb: 56, 189, 248;
+  --accent-primary-hover: #7dd3fc;
+  --accent-success: #4ade80;
+  --accent-warning: #fbbf24;
+  --accent-danger: #f87171;
+  
+  --border-color: rgba(63, 63, 70, 0.5); /* Zinc 700 */
+  --border-active: #38bdf8;
+  
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  
+  --shadow-premium: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  line-height: 1.5;
+  overflow: hidden; 
+}
+
+/* App Layout */
+.app-container {
+  display: block;
+  position: relative;
+  height: 100vh;
+  width: 100vw;
+}
+
+.map-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+/* Floating Sidebar/Botonera */
+.sidebar {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  width: 320px;
+  max-height: calc(100vh - 48px);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  z-index: 10;
+  overflow-y: auto;
+  
+  background: var(--bg-panel);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+}
+
+
+.title-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+/* Typography matching image style */
+h1 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+  padding-bottom: 4px;
+  margin-bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: auto;
+}
+
+.sidebar header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 16px;
+  margin-bottom: 12px;
+  width: 100%;
+}
+
+.sidebar header p {
+  margin: 0;
+  width: 100%;
+}
+
+h2 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 12px;
+  color: var(--text-secondary);
+}
+
+/* Glass Cards for Parcel List Items */
+.glass-card {
+  flex-shrink: 0;
+  background: rgba(39, 39, 42, 0.4);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  transition: var(--transition);
+  position: relative;
+  overflow: visible;
+}
+
+.glass-card:hover {
+  background: rgba(39, 39, 42, 0.6);
+  border-color: var(--border-active);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-premium);
+}
+
+/* Premium Buttons */
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  border: 1px solid transparent;
+  width: 100%;
+}
+
+.btn-primary {
+  background: var(--accent-primary);
+  color: #000;
+  box-shadow: 0 0 15px rgba(56, 189, 248, 0.3);
+}
+
+.btn-primary:hover {
+  background: var(--accent-primary-hover);
+  transform: scale(1.02);
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.5);
+}
+
+.btn-secondary {
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+.btn-secondary:hover {
+  background: rgba(63, 63, 70, 0.8);
+  border-color: var(--text-secondary);
+}
+
+.action-icon-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+}
+
+.action-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.action-icon-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+
+/* Real-time HUD (Heads-Up Display) */
+.map-hud {
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 16px;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.hud-stat {
+  background: var(--bg-panel);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 8px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: var(--shadow-premium);
+  animation: slideInDown 0.5s ease-out;
+}
+
+.hud-value {
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: var(--accent-primary);
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+}
+
+.hud-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+}
+
+/* Micro-animations */
+@keyframes slideInDown {
+  from { transform: translateY(-20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes pulse-cyan {
+  0% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(56, 189, 248, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); }
+}
+
+.pulse-indicator {
+  animation: pulse-cyan 2s infinite;
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 8s linear infinite;
+}
+
+@keyframes pulse-slow {
+  0% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); opacity: 0.8; }
+}
+
+.pulse-slow {
+  animation: pulse-slow 3s ease-in-out infinite;
+}
+
+/* Statistics animations */
+.statistics-container .stat-card {
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.statistics-container .stat-card:hover {
+  transform: translateY(-5px) scale(1.05);
+}
+
+p {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 300;
+}
+
+/* Forms & Inputs */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+select, input, .dropdown {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-weight: 400;
+  font-size: 0.85rem;
+  transition: var(--transition);
+  outline: none;
+  cursor: pointer;
+}
+
+select:focus, input:focus {
+  border-color: var(--border-active);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+select option {
+  background: #111;
+  color: var(--text-primary);
+}
+
+/* Buttons - Thin, wireframe style */
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-weight: 400;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.btn-primary {
+  border-color: var(--accent-primary);
+}
+
+.btn-primary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--accent-primary-hover);
+  color: var(--accent-primary-hover);
+}
+
+.btn-primary:active {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.btn-primary:disabled {
+  border-color: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.2);
+  cursor: not-allowed;
+  background: transparent;
+}
+
+.btn-tiny {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.btn-tiny:hover {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* File Drop Zone */
+.dropzone {
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 24px 16px;
+  text-align: center;
+  transition: var(--transition);
+  cursor: pointer;
+  background: rgba(255,255,255,0.02);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.dropzone:hover, .dropzone.active {
+  border-color: var(--border-active);
+  background: rgba(255,255,255,0.05);
+}
+
+.dropzone.error {
+  border-color: #ff4444;
+  background: rgba(255, 68, 68, 0.05);
+}
+
+.drop-icon {
+  width: 32px;
+  height: 32px;
+  color: var(--text-primary);
+  opacity: 0.8;
+  margin-bottom: 4px;
+}
+
+/* Switch / Checkbox - Wireframe minimalist */
+.switch-group {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+}
+
+.switch-label {
+  display: flex;
+  flex-direction: column;
+}
+
+.switch-label span {
+  font-weight: 400;
+  font-size: 0.85rem;
+}
+
+.switch-label small {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 300;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: transparent;
+  transition: .2s;
+  border: 1px solid var(--border-color);
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background-color: var(--text-secondary);
+  transition: .2s;
+}
+
+input:checked + .slider {
+  border-color: var(--accent-primary);
+}
+
+input:checked + .slider:before {
+  transform: translateX(20px);
+  background-color: var(--accent-primary);
+}
+
+/* Parcel List */
+.parcel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 250px;
+  overflow-y: auto;
+  padding: 4px;
+  margin-top: 4px;
+}
+
+.parcel-list > div {
+  flex-shrink: 0;
+  border: 1px solid var(--border-color);
+  background: rgba(255,255,255,0.02);
+  font-weight: 400;
+  color: var(--text-primary);
+  transition: background 0.2s;
+  min-height: fit-content;
+}
+
+.parcel-list > div:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+
+
+/* Scrollbar styles */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
+
+/* Leaflet Overrides for Map */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  background-color: var(--bg-base) !important; /* Pure black */
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+/* Hide leaflet controls to keep it clean, if desired we can position them */
+.leaflet-control-zoom {
+  border: 1px solid rgba(255,255,255,0.2) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
+.leaflet-control-zoom a {
+  background: rgba(10,10,10,0.6) !important;
+  color: white !important;
+  backdrop-filter: blur(4px) !important;
+  border-radius: 0 !important;
+  border-bottom: 1px solid rgba(255,255,255,0.1) !important;
+}
+
+.leaflet-control-zoom a:hover {
+  background: rgba(255,255,255,0.1) !important;
+}
+
+.leaflet-control-attribution {
+  background: rgba(0,0,0,0.5) !important;
+  color: rgba(255,255,255,0.5) !important;
+}
+
+.leaflet-control-attribution a {
+  color: rgba(255,255,255,0.8) !important;
+}
+
+/* Custom tooltip for Map (Minimalist Technical) */
+.custom-tooltip-wrapper {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.custom-tooltip-wrapper .leaflet-tooltip {
+  background: rgba(10, 10, 10, 0.9);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--accent-primary);
+  border-radius: 4px;
+  padding: 8px 12px;
+  color: #ffffff;
+  font-family: 'Inter', sans-serif;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+}
+
+.custom-tooltip {
+  background: rgba(0, 0, 0, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 6px 10px;
+  color: white;
+  font-family: 'Inter', monospace;
+  backdrop-filter: blur(4px);
+}
+
+.custom-tooltip .value-name {
+  font-weight: 700;
+  font-size: 13px;
+  margin-bottom: 4px;
+  color: var(--accent-primary);
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  padding-bottom: 4px;
+}
+
+.custom-tooltip .value-detail {
+  font-size: 11px;
+  opacity: 0.9;
+  margin: 2px 0;
+}
+
+.custom-tooltip .value-area {
+  font-weight: 300;
+  color: #aaa;
+  font-size: 0.75rem;
+  margin-top: 4px;
+}
+
+/* Fix for large bounding box outline when a polygon path is clicked/focused */
+path.leaflet-interactive:focus {
+  outline: none;
+}
+
+/* Base Maps Layer Control Custom Styling */
+.leaflet-control-layers.leaflet-control {
+  background-color: var(--bg-panel);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: 'Inter', system-ui, sans-serif;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  padding: 6px;
+  transition: var(--transition);
+}
+
+/* Make toggle match technical button style */
+.leaflet-control-layers {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.leaflet-control-layers-toggle {
+  background-color: var(--bg-panel) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  border: 1px solid var(--border-color) !important;
+  width: 34px !important;
+  height: 34px !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+  border-radius: var(--radius-sm) !important;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 12 12 17 22 12"></polyline><polyline points="2 17 12 22 22 17"></polyline></svg>') !important;
+  background-size: 20px 20px !important;
+  background-position: center !important;
+}
+
+.leaflet-control-layers-toggle:hover {
+  background-color: var(--bg-input) !important;
+  border-color: var(--accent-primary) !important;
+  transform: translateY(-1px);
+}
+
+.leaflet-control-layers-expanded {
+  background-color: rgba(12, 12, 14, 0.95) !important; /* Extremely dark Zinc for best contrast */
+  border: 1px solid var(--border-color) !important;
+  backdrop-filter: blur(16px) !important;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.8) !important;
+  border-radius: var(--radius-sm) !important;
+  padding: 8px 12px !important; /* Reduced padding for compact look */
+}
+
+.leaflet-control-layers-toggle:hover {
+  opacity: 1 !important;
+}
+
+/* Ensure font properties inherited cleanly inside the actual list container */
+.leaflet-control-layers-base {
+  font-size: 0.75rem !important;
+  font-weight: 500 !important;
+  display: flex !important;
+  flex-direction: column !important;  /* vertical list */
+  gap: 8px !important;
+  align-items: flex-start;
+  color: #ffffff !important;
+}
+
+/* Restyle labels to match the retro minimalist look */
+.leaflet-control-layers-base label {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0px !important;
+  white-space: nowrap; /* Prevent horizontal wrapping */
+  cursor: pointer;
+  color: var(--text-primary);
+  opacity: 0.85;
+  transition: opacity 0.2s;
+  text-transform: none; /* Override uppercase constraint here */
+  letter-spacing: normal;
+  font-weight: 300;
+}
+
+.leaflet-control-layers-base label:hover {
+  opacity: 1;
+}
+
+/* Custom Checkbox/Radio styling for map layers */
+.leaflet-control-layers-selector {
+  appearance: none;
+  background-color: transparent;
+  margin: 0 !important;
+  font: inherit;
+  color: var(--accent-primary);
+  width: 1.15em;
+  height: 1.15em;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm); /* keep radios square to match retro UI */
+  display: grid;
+  place-content: center;
+  transition: .2s;
+}
+
+.leaflet-control-layers-selector::before {
+  content: "";
+  width: 0.65em;
+  height: 0.65em;
+  border-radius: var(--radius-sm);
+  transform: scale(0);
+  transition: 120ms transform ease-in-out;
+  background-color: var(--accent-primary);
+}
+
+.leaflet-control-layers-selector:checked {
+  border-color: var(--accent-primary);
+}
+
+.leaflet-control-layers-selector:checked::before {
+  transform: scale(1);
+}
+
+/* Coordinates Tracker */
+.coordinates-tracker {
+  background-color: rgba(12, 12, 14, 0.7) !important; /* Zinc-950 with transparency */
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border: 1px solid var(--border-color) !important;
+  color: #f4f4f5 !important;
+  font-family: 'JetBrains Mono', 'Roboto Mono', monospace !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: stretch !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+  pointer-events: none !important;
+  height: 28px !important;
+  border-radius: 4px !important;
+}
+
+.coord-crosshair {
+  width: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: var(--text-secondary);
+}
+
+.coord-separator {
+  width: 1px;
+  background-color: var(--border-color);
+  margin: 4px 0;
+}
+
+.coord-values {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+}
+
+.coord-unit {
+  color: var(--accent-primary);
+  font-size: 10px;
+  font-weight: 400;
+  opacity: 0.8;
+}
+
+/* Map Scale Custom Styling */
+/* Map Scale - Checkerboard Graphic Scale */
+.leaflet-control-scale-line {
+  background: repeating-linear-gradient(
+    90deg,
+    var(--bg-panel) 0,
+    var(--bg-panel) 25%,
+    rgba(161, 161, 170, 0.4) 25%,
+    rgba(161, 161, 170, 0.4) 50%
+  ) !important;
+  backdrop-filter: blur(8px) !important;
+  border: 1px solid var(--border-color) !important;
+  color: #fff !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  height: 28px !important;
+  line-height: 28px !important;
+  padding: 0 10px !important;
+  text-align: center !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important;
+  border-radius: 4px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-shadow: 0 0 4px rgba(0,0,0,0.8) !important;
+  position: relative !important;
+  min-width: 200px !important;
+}
+
+.leaflet-control-scale-line::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: 0;
+  width: 100%;
+  height: 6px;
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--border-color) 0,
+    var(--border-color) 1px,
+    transparent 1px,
+    transparent 25%
+  );
+}
+
+/* Cookie Banner Custom Retro Styling */
+.cookie-banner {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  max-width: 600px;
+  background-color: var(--bg-panel);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  z-index: 9999;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  animation: slideUp 0.5s ease-out;
+}
+
+.cookie-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cookie-icon {
+  font-size: 1.5rem;
+  opacity: 0.9;
+}
+
+.cookie-text {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  font-weight: 300;
+}
+
+.cookie-text strong {
+  color: var(--text-primary);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.cookie-btn {
+  white-space: nowrap;
+  padding: 8px 16px !important;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 20px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+
+/* Leaflet Measure Tool Dark Theme Overrides */
+.leaflet-control-measure {
+  background-color: var(--bg-panel) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: var(--radius-sm) !important;
+  backdrop-filter: blur(10px);
+}
+
+.leaflet-control-measure h3 {
+  color: var(--accent-primary) !important;
+  font-size: 1rem !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  margin-bottom: 8px !important;
+}
+
+.leaflet-control-measure a.start, 
+.leaflet-control-measure a.cancel, 
+.leaflet-control-measure a.finish {
+  color: var(--accent-primary) !important;
+  text-decoration: none !important;
+  font-weight: 500 !important;
+}
+
+.leaflet-control-measure a.start:hover, 
+.leaflet-control-measure a.cancel:hover, 
+.leaflet-control-measure a.finish:hover {
+  opacity: 0.8;
+}
+
+.leaflet-control-measure-interaction {
+  padding: 12px !important;
+}
+
+.leaflet-control-measure .results .group {
+  border-top: 1px solid var(--border-color) !important;
+  margin-top: 8px !important;
+  padding-top: 8px !important;
+}
+
+/* Geoman Toolbar Noir Styling */
+.leaflet-pm-toolbar {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.leaflet-pm-toolbar .leaflet-buttons-control-button .leaflet-pm-icon {
+  filter: invert(1) brightness(2); /* Make icons white */
+}
+
+.leaflet-buttons-control-button,
+.leaflet-pm-toolbar .leaflet-buttons-control-button {
+  background-color: var(--bg-panel) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  border: 1px solid var(--border-color) !important;
+  width: 34px !important;
+  height: 34px !important;
+  margin-bottom: 6px !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+.leaflet-buttons-control-button:hover,
+.leaflet-pm-toolbar .leaflet-buttons-control-button:hover {
+  background-color: var(--bg-input) !important;
+  border-color: var(--accent-primary) !important;
+  transform: translateY(-1px);
+}
+
+.leaflet-buttons-control-button.active,
+.leaflet-buttons-control-button.active:hover {
+  background-color: var(--accent-primary) !important;
+  border-color: var(--accent-primary) !important;
+}
+
+.leaflet-buttons-control-button.active .leaflet-pm-icon {
+  filter: invert(1) brightness(0) !important; /* Make icons black when active on cyan bg */
+}
+
+/* Geoman tooltips and measurement styling */
+.leaflet-pm-tooltip {
+  background-color: rgba(0, 0, 0, 0.9) !important;
+  color: white !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  border-radius: 0px !important;
+  font-family: 'Inter', sans-serif;
+  padding: 4px 8px !important;
+}
+
+.leaflet-pm-measure-value {
+  font-weight: 600 !important;
+  color: white !important;
+}
+
+/* Custom Tooltip for Manual Measurements */
+.measure-tooltip {
+  background-color: rgba(0, 0, 0, 0.85) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  border-radius: 0px !important;
+  padding: 4px 8px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+  backdrop-filter: blur(4px) !important;
+}
+
+.measure-tooltip::before {
+  border: none !important; /* Hide default leaflet tooltip arrow */
+}
+
+/* Coordinates Table in Sidebar */
+.coords-table-container {
+  margin-top: 12px;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 0px;
+  background: rgba(0,0,0,0.2);
+}
+
+.coords-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+  font-family: 'Inter', monospace;
+  text-align: right;
+}
+
+.coords-table th {
+  background: rgba(255,255,255,0.05);
+  position: sticky;
+  top: 0;
+  padding: 6px 8px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  border-bottom: 1px solid var(--border-color);
+  text-align: right;
+  z-index: 10;
+  backdrop-filter: blur(4px);
+}
+
+.coords-table td {
+  padding: 6px 8px;
+  color: var(--text-primary);
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.coords-table tr:hover td {
+  background: rgba(255,255,255,0.05);
+}
+
+/* Vertex Number Markers on Map */
+.vertex-marker {
+  background-color: rgba(0, 0, 0, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  color: white;
+  border-radius: 50%;
+  font-family: 'Inter', monospace;
+  font-size: 0.65rem;
+  font-weight: 600;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+/* AutoCAD Background Color */
+.map-cad-bg {
+  background-color: #212830 !important; /* Classic Civil 3D / AutoCAD dark background */
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 10000;
+  display: grid;
+  place-content: center;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.modal-content {
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.8);
+  width: 90vw;
+  max-width: 450px;
+  padding: 24px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 12px;
+  margin-bottom: 4px;
+}
+
+.modal-header h2 {
+  margin: 0;
+  border: none;
+  font-size: 1.25rem;
+}
+
+.close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 2rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.close-btn:hover {
+  color: var(--text-primary);
+}
+
+textarea {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.85rem;
+  resize: vertical;
+  min-height: 80px;
+  outline: none;
+  transition: var(--transition);
+}
+
+textarea:focus {
+  border-color: var(--accent-primary);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.success-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+  padding: 32px 16px;
+}
+
+.success-icon {
+  font-size: 3rem;
+  color: #4CAF50;
+  border: 2px solid #4CAF50;
+  border-radius: 50%;
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-content: center;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Topology Warnings & Overlaps */
+.topology-warning-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background-color: #f59e0b;
+  color: #000;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 800;
+  margin-right: 8px;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+}
+
+.overlap-highlight-svg {
+  filter: drop-shadow(0 0 4px #f59e0b);
+  stroke-dasharray: 5, 5;
+  animation: dashMove 20s linear infinite;
+}
+
+@keyframes dashMove {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: 1000; }
+}
+
+.topology-btn-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.btn-warning {
+  border-color: #f59e0b;
+  color: #f59e0b;
+}
+
+.btn-warning:hover {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: #fbbf24;
+  color: #fbbf24;
+}
+
+/* -----------------------------------------------------------------------------
+   IVGA & MAP CONTROLS REFINEMENT
+   ----------------------------------------------------------------------------- */
+
+/* Horizontal Bottom-Left Bar */
+.leaflet-bottom.leaflet-left {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: flex-end !important;
+  gap: 12px;
+  padding: 0 0 12px 12px;
+}
+
+.leaflet-bottom.leaflet-left .leaflet-control {
+  margin: 0 !important;
+}
+
+/* Prevent Layer Control from pushing siblings when expanding on hover */
+.leaflet-control-layers {
+  width: 34px;
+  height: 34px;
+  overflow: visible !important;
+}
+
+.leaflet-control-layers-expanded {
+  width: auto !important;
+  height: auto !important;
+  position: absolute !important;
+  bottom: 0px !important;
+  left: 0px !important;
+  z-index: 1000;
+}
+
+/* Specific styling for IVGA Overlays on Map */
+.ivga-gap {
+  fill: #f87171 !important;
+  fill-opacity: 0.5 !important;
+  stroke: #f87171 !important;
+  stroke-width: 2 !important;
+  stroke-dasharray: 4 !important;
+}
+
+.ivga-encroachment {
+  fill: #fb923c !important;
+  fill-opacity: 0.6 !important;
+  stroke: #f97316 !important;
+  stroke-width: 2;
+  pointer-events: none !important;
+}
+
+.ivga-internal-overlap {
+  fill: #facc15 !important;
+  fill-opacity: 0.6 !important;
+  stroke: #eab308 !important;
+  stroke-width: 2;
+  pointer-events: none !important;
+}

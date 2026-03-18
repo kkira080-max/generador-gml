@@ -1,0 +1,38 @@
+{
+  "name": "gml-webapp",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@geoman-io/leaflet-geoman-free": "^2.19.2",
+    "@turf/turf": "^7.3.4",
+    "dxf-parser": "^1.1.2",
+    "dxf-writer": "^1.18.4",
+    "jszip": "^3.10.1",
+    "leaflet": "^1.9.4",
+    "leaflet-geometryutil": "^0.10.3",
+    "lucide-react": "^0.577.0",
+    "proj4": "^2.20.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.13.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "@xmldom/xmldom": "^0.8.11",
+    "eslint": "^9.13.0",
+    "eslint-plugin-react": "^7.37.2",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "eslint-plugin-react-refresh": "^0.4.14",
+    "globals": "^15.11.0",
+    "vite": "^5.4.10"
+  }
+}
