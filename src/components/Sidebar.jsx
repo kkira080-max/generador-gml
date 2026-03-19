@@ -7,7 +7,7 @@ import { generateGMLv4 } from '../utils/gmlGenerator';
 import { generateDXF } from '../utils/dxfGenerator';
 import { validateTopology, calculatePerimeter } from '../utils/geoUtils';
 import Statistics from './Statistics';
-import SupportModal from './SupportModal';
+import Statistics from './Statistics';
 
 
 export default function Sidebar({
@@ -34,14 +34,14 @@ export default function Sidebar({
   topologyStatus = {},
   onFlyToLocation,
   stats,
-  onIncrementStat
+  onIncrementStat,
+  onOpenSupportModal
 }) {
 
   const [dragActive, setDragActive] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [searchRefCat, setSearchRefCat] = useState('');
   const [isSearching, setIsSearching] = useState(false);
-  const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
 
   const handleDrag = (e) => {
     e.preventDefault();
@@ -495,7 +495,7 @@ export default function Sidebar({
 
       <button 
         className="btn btn-secondary support-btn" 
-        onClick={() => setIsSupportModalOpen(true)}
+        onClick={onOpenSupportModal}
         style={{
           width: '100%',
           marginTop: '-15px',
@@ -873,11 +873,6 @@ export default function Sidebar({
           </>
         );
       })()}
-      
-      <SupportModal 
-        isOpen={isSupportModalOpen} 
-        onClose={() => setIsSupportModalOpen(false)} 
-      />
     </div>
   );
 }

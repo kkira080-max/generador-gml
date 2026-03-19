@@ -12,6 +12,7 @@ import { detectOverlaps, resolveOverlaps, validateTopology } from './utils/overl
 import { calculateBbox, transformFromWGS84, transformToWGS84, calculatePolygonArea, closeRing } from './utils/geoUtils';
 import * as turf from '@turf/turf';
 import { supabase } from './utils/supabaseClient';
+import SupportModal from './components/SupportModal';
 
 
 function App() {
@@ -22,6 +23,7 @@ function App() {
   const [huso, setHuso] = useState('');
   const [detectIslands, setDetectIslands] = useState(false);
   const [isBuildingModalOpen, setIsBuildingModalOpen] = useState(false);
+  const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
   const [buildingQueue, setBuildingQueue] = useState([]); // Kept for future or internal use if needed
   const [targetParcelForBuilding, setTargetParcelForBuilding] = useState(null);
   const [isProcessingCadastre, setIsProcessingCadastre] = useState(false);
@@ -592,6 +594,7 @@ function App() {
         onFlyToLocation={setFlyToTarget}
         stats={stats}
         onIncrementStat={incrementStat}
+        onOpenSupportModal={() => setIsSupportModalOpen(true)}
       />
       <BuildingDataModal 
         isOpen={isBuildingModalOpen} 
@@ -601,6 +604,10 @@ function App() {
       />
       {/* <FeedbackModal />  -- Removed temporarily as requested */}
       <CookieBanner />
+      <SupportModal 
+        isOpen={isSupportModalOpen} 
+        onClose={() => setIsSupportModalOpen(false)} 
+      />
     </div>
   );
 }
