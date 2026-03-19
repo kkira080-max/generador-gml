@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Users, FileCheck, Download, Globe, Zap, Loader2, RefreshCw, AlertCircle } from 'lucide-react';
 import { supabase } from '../utils/supabaseClient';
 
 export default function Statistics({ localStats }) {
-  const [onlineStats, setOnlineStats] = useState({ visits: 0, conversions: 0, downloads: 0 });
-  const [loadingOnline, setLoadingOnline] = useState(false);
-  const [activeTab, setActiveTab] = useState('local');
-  const [errorSync, setErrorSync] = useState(false);
+  const [onlineStats, setOnlineStats] = React.useState({ visits: 0, conversions: 0, downloads: 0 });
+  const [loadingOnline, setLoadingOnline] = React.useState(false);
+  const [activeTab, setActiveTab] = React.useState('local');
+  const [errorSync, setErrorSync] = React.useState(false);
 
   const fetchOnlineStats = async () => {
     setLoadingOnline(true);
@@ -36,7 +36,7 @@ export default function Statistics({ localStats }) {
     }
   };
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (activeTab === 'online') {
       fetchOnlineStats();
     }

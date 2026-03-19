@@ -49,15 +49,31 @@ function App() {
     setStats(prev => ({ ...prev, visits: prev.visits + 1 }));
     
     // Real online sync
-    supabase.rpc('increment_stat', { row_id: 1, column_name: 'visits' })
-      .catch(error => console.error("Supabase sync error:", error));
+    const syncVisit = async () => {
+      if (supabase && typeof supabase.rpc === 'function') {
+        try {
+          const { error } = await supabase.rpc('increment_stat', { row_id: 1, column_name: 'visits' });
+          if (error) console.warn("Supabase visits sync issue:", error.message);
+        } catch (err) {
+          console.warn("Failed to sync visits:", err);
+        }
+      }
+    };
+    syncVisit();
   }, []);
 
-  const incrementStat = (type) => {
+  const incrementStat = async (type) => {
     setStats(prev => ({ ...prev, [type]: prev[type] + 1 }));
     // Real online sync
-    supabase.rpc('increment_stat', { row_id: 1, column_name: type === 'conversions' ? 'conversions' : 'downloads' })
-      .catch(error => console.error("Supabase sync error:", error));
+    if (supabase && typeof supabase.rpc === 'function') {
+      try {
+        const col = type === 'conversions' ? 'conversions' : 'downloads';
+        const { error } = await supabase.rpc('increment_stat', { row_id: 1, column_name: col });
+        if (error) console.warn(`Supabase ${type} sync issue:`, error.message);
+      } catch (err) {
+        console.warn(`Failed to sync ${type}:`, err);
+      }
+    }
   };
   // -------------------------
 
