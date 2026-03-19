@@ -140,7 +140,10 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
 
       // I will add a custom property to the map to track if we are just measuring
       if (initialMap._isMeasuring) {
-        // Just let it be, it has tooltips. Add a 'Remove' button to the layer tooltip?
+        // Enable measurements on the finished layer to keep labels visible
+        layer.pm.enable({
+          measurements: { display: true }
+        });
         layer.bindPopup('Medición finalizada. <button onclick="this.parentNode.parentNode.remove()">Eliminar</button>');
         return;
       }
@@ -176,11 +179,16 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
             button.style.backgroundColor = '#38bdf8';
             button.style.color = '#000';
             initialMap.pm.enableDraw('Line', { 
-              measurements: { display: true },
+              measurements: { 
+                display: true,
+                totalLength: true,
+                segmentLength: true,
+                showTooltip: true
+              },
               snappable: true,
               snapDistance: 20
             });
-            alert("Modo Medición ACTIVO. Dibuja líneas o polígonos para ver medidas. No se guardarán como parcelas.");
+            alert("Modo Medición ACTIVO. Al dibujar verás las distancias entre puntos y el total. Haz clic para empezar.");
           } else {
             button.style.backgroundColor = '';
             button.style.color = '';
