@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UploadCloud, FileJson, AlertCircle, AlertTriangle, Download, Trash2, Map, Eye, EyeOff, List, Building, Search, Loader2 } from 'lucide-react';
+import { UploadCloud, FileJson, AlertCircle, AlertTriangle, Download, Trash2, Map, Eye, EyeOff, List, Building, Search, Loader2, LifeBuoy } from 'lucide-react';
 import JSZip from 'jszip';
 import { parseGML } from '../utils/gmlParser';
 import { parseDXF } from '../utils/dxfParser';
@@ -490,6 +490,27 @@ export default function Sidebar({
 
       {/* 3. Estadísticas */}
       <Statistics localStats={stats} />
+
+      <button 
+        className="btn btn-secondary support-btn" 
+        onClick={() => window.open('mailto:soporte@generadorgml.com', '_blank')}
+        style={{
+          width: '100%',
+          marginTop: '-15px',
+          marginBottom: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px',
+          fontSize: '0.75rem',
+          background: 'rgba(56, 189, 248, 0.05)',
+          border: '1px solid rgba(56, 189, 248, 0.2)',
+          color: '#38bdf8',
+          height: '38px'
+        }}
+      >
+        <LifeBuoy size={16} /> SOPORTE TÉCNICO
+      </button>
 
 
       {adjustmentSession && (
