@@ -131,36 +131,6 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
 
     initialMap.on('pm:create', (e) => {
       const layer = e.layer;
-      
-      // If we are in "Measurement mode", we DON'T add to parcels, 
-      // we just let the layer stay until "Clear" or "Exit measurement mode".
-      const isMeasurementMode = initialMap.pm.globalDrawMode === 'Line' || initialMap.pm.globalDrawMode === 'Polygon';
-      // Wait, Geoman doesn't have a specific "measurement" flag on p:create by default 
-      // unless we manage it. 
-
-      // I will add a custom property to the map to track if we are just measuring
-      if (initialMap._isMeasuring) {
-        // Enable measurements on the finished layer to keep labels visible
-        layer.pm.enable({
-          measurements: { 
-            display: true,
-            totalLength: true,
-            segmentLength: true,
-            area: true,
-            showTooltip: true
-          }
-        });
-        
-        // Manual override for visibility if Geoman is being finicky
-        if (layer.pm._measurements) {
-          layer.pm._measurements.display = true;
-          layer.pm._measurements.update();
-        }
-
-        layer.bindPopup('Medición finalizada. <button onclick="this.parentNode.parentNode.remove()">Eliminar</button>');
-        return;
-      }
-
       const geojson = layer.toGeoJSON();
       
       if (e.shape === 'Marker') {
@@ -175,45 +145,6 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
       onDrawingCreated(geojson);
       initialMap.removeLayer(layer);
     });
-
-    // --- CUSTOM MEASUREMENT BUTTON ---
-    const measureControl = L.Control.extend({
-      onAdd: function() {
-        const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
-        const button = L.DomUtil.create('a', 'measure-tool-btn', container);
-        button.innerHTML = '📏';
-        button.title = 'Modo Medición (No crea parcelas)';
-        button.href = '#';
-
-        L.DomEvent.on(button, 'click', (ev) => {
-          L.DomEvent.preventDefault(ev);
-          initialMap._isMeasuring = !initialMap._isMeasuring;
-          if (initialMap._isMeasuring) {
-            button.style.backgroundColor = '#38bdf8';
-            button.style.color = '#000';
-            initialMap.pm.enableDraw('Line', { 
-              measurements: { 
-                display: true,
-                totalLength: true,
-                segmentLength: true,
-                showTooltip: true
-              },
-              snappable: true,
-              snapDistance: 20
-            });
-            alert("Modo Medición ACTIVO. Al dibujar verás las distancias entre puntos y el total. Haz clic para empezar.");
-          } else {
-            button.style.backgroundColor = '';
-            button.style.color = '';
-            initialMap.pm.disableDraw();
-            alert("Modo Medición DESACTIVADO.");
-          }
-        });
-        return container;
-      }
-    });
-
-    new measureControl({ position: 'topleft' }).addTo(initialMap);
 
     // -------------------------------------------------------------------------
     // HUD & BOTTOM CONTROLS (HORIZONTAL BAR)
