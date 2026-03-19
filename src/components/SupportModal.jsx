@@ -43,10 +43,13 @@ export default function SupportModal({ isOpen, onClose }) {
 
   return (
     <div className="modal-overlay">
-      <div className="modal-content glass-card support-modal">
+      <div className="modal-content glass-panel support-modal">
         <div className="modal-header">
-          <h3>SOPORTE TÉCNICO</h3>
-          <button className="close-btn" onClick={onClose}><X size={20} /></button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <LifeBuoy size={20} color="var(--accent-primary)" />
+            <h2 style={{ fontSize: '1.1rem', margin: 0 }}>SOPORTE TÉCNICO</h2>
+          </div>
+          <button className="close-btn" onClick={onClose}><X size={24} /></button>
         </div>
 
         {status === 'success' ? (
@@ -54,11 +57,11 @@ export default function SupportModal({ isOpen, onClose }) {
             <CheckCircle size={48} color="var(--accent-primary)" />
             <h4>¡Mensaje enviado!</h4>
             <p>Te responderemos lo antes posible a tu correo electrónico.</p>
-            <button className="btn btn-primary" onClick={onClose} style={{ marginTop: '20px' }}>Cerrar</button>
+            <button className="btn btn-primary" onClick={onClose} style={{ marginTop: '20px', width: '200px' }}>Cerrar</button>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="support-form">
-            <p className="form-intro">Cuéntanos qué necesitas y te ayudaremos.</p>
+            <p className="form-intro">Cuéntanos qué necesitas y el equipo técnico de GML-Generator te ayudará lo antes posible.</p>
             
             <div className="form-group">
               <label>Tu Nombre</label>
@@ -86,10 +89,10 @@ export default function SupportModal({ isOpen, onClose }) {
               <label>Mensaje / Consulta</label>
               <textarea 
                 required 
-                rows="4"
+                rows="5"
                 value={formData.message}
                 onChange={(e) => setFormData({...formData, message: e.target.value})}
-                placeholder="Describe tu problema o sugerencia..."
+                placeholder="Describe tu problema o sugerencia con el mayor detalle posible..."
               ></textarea>
             </div>
 
@@ -97,115 +100,19 @@ export default function SupportModal({ isOpen, onClose }) {
               <div className="error-msg">{errorMsg}</div>
             )}
 
-            <button type="submit" className="btn btn-primary submit-btn" disabled={status === 'loading'}>
-              {status === 'loading' ? <Loader2 className="animate-spin" /> : <><Send size={18} /> ENVIAR MENSAJE</>}
-            </button>
+            <div style={{ display: 'flex', gap: 12, marginTop: 10 }}>
+              <button type="submit" className="btn btn-primary submit-btn" disabled={status === 'loading'} style={{ flex: 1 }}>
+                {status === 'loading' ? <Loader2 className="animate-spin" /> : <><Send size={18} /> ENVIAR CONSULTA</>}
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={onClose} style={{ flex: 0.5 }}>
+                CANCELAR
+              </button>
+            </div>
           </form>
         )}
       </div>
-
-      <style jsx="true">{`
-        .modal-overlay {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0, 0, 0, 0.8);
-          backdrop-filter: blur(5px);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 2000;
-          animation: fadeIn 0.3s ease;
-        }
-        .support-modal {
-          width: 90%;
-          max-width: 450px;
-          padding: 30px;
-          border: 1px solid var(--accent-primary);
-          box-shadow: 0 0 30px rgba(0, 255, 157, 0.1);
-        }
-        .modal-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 20px;
-        }
-        .modal-header h3 {
-          margin: 0;
-          font-size: 1.2rem;
-          color: var(--accent-primary);
-          letter-spacing: 0.1em;
-        }
-        .close-btn {
-          background: none;
-          border: none;
-          color: var(--text-secondary);
-          cursor: pointer;
-        }
-        .form-intro {
-          font-size: 0.9rem;
-          color: var(--text-secondary);
-          margin-bottom: 20px;
-        }
-        .form-group {
-          margin-bottom: 15px;
-        }
-        .form-group label {
-          display: block;
-          font-size: 0.75rem;
-          text-transform: uppercase;
-          color: var(--accent-primary);
-          margin-bottom: 8px;
-          font-weight: bold;
-        }
-        .form-group input, .form-group textarea {
-          width: 100%;
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 8px;
-          padding: 12px;
-          color: #fff;
-          font-size: 0.9rem;
-          outline: none;
-        }
-        .form-group input:focus, .form-group textarea:focus {
-          border-color: var(--accent-primary);
-        }
-        .submit-btn {
-          width: 100%;
-          height: 48px;
-          margin-top: 10px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 10px;
-          font-weight: bold;
-        }
-        .success-message {
-          text-align: center;
-          padding: 20px 0;
-        }
-        .success-message h4 {
-          margin: 15px 0 10px;
-          color: var(--accent-primary);
-        }
-        .success-message p {
-          color: var(--text-secondary);
-          font-size: 0.9rem;
-        }
-        .error-msg {
-          color: #ff4d4d;
-          font-size: 0.8rem;
-          margin-bottom: 10px;
-          text-align: center;
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-      `}</style>
     </div>
   );
 }
+
+import { LifeBuoy } from 'lucide-react';

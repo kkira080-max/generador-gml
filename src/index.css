@@ -1310,3 +1310,39 @@ textarea:focus {
   stroke-width: 2;
   pointer-events: none !important;
 }
+
+/* Support Modal Styles */
+.support-modal {
+  width: 90%;
+  max-width: 500px !important;
+  padding: 30px !important;
+  border: 1px solid var(--accent-primary) !important;
+  box-shadow: 0 0 40px rgba(56, 189, 248, 0.2) !important;
+}
+
+.support-form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.form-intro {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+.form-group label {
+  color: var(--accent-primary) !important;
+  font-weight: 600 !important;
+  margin-bottom: 6px !important;
+}
+
+.error-msg {
+  color: var(--accent-danger);
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 10px;
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid var(--accent-danger);
+}
