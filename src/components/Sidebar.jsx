@@ -7,7 +7,6 @@ import { generateGMLv4 } from '../utils/gmlGenerator';
 import { generateDXF } from '../utils/dxfGenerator';
 import { validateTopology, calculatePerimeter } from '../utils/geoUtils';
 import Statistics from './Statistics';
-import Statistics from './Statistics';
 
 
 export default function Sidebar({
