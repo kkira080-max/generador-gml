@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import MapViewer from './components/MapViewer';
 import CookieBanner from './components/CookieBanner';
-import FeedbackModal from './components/FeedbackModal';
-import BuildingDataModal from './components/BuildingDataModal';
 import { detectAndSubtractIslands } from './utils/islandDetection';
 import { generateBuildingGML } from './utils/buildingGmlGenerator';
 import { fetchParcelsByBbox } from './utils/cadastreService';
@@ -12,6 +10,7 @@ import { detectOverlaps, resolveOverlaps, validateTopology } from './utils/overl
 import { calculateBbox, transformFromWGS84, transformToWGS84, calculatePolygonArea, closeRing } from './utils/geoUtils';
 import * as turf from '@turf/turf';
 import { supabase } from './utils/supabaseClient';
+import BuildingDataModal from './components/BuildingDataModal';
 import SupportModal from './components/SupportModal';
 
 
@@ -602,7 +601,6 @@ function App() {
         onSave={handleSaveBuildingGML}
         initialData={targetParcelForBuilding ? { id: targetParcelForBuilding.name.replace(/\.[^/.]+$/, "") } : {}}
       />
-      {/* <FeedbackModal />  -- Removed temporarily as requested */}
       <CookieBanner />
       <SupportModal 
         isOpen={isSupportModalOpen} 
