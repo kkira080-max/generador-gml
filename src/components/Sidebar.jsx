@@ -829,14 +829,6 @@ export default function Sidebar({
                             >
                               <Download size={12} /> .KML
                             </button>
-                            <button
-                              className="btn-tiny"
-                              onClick={() => handleExportSingle(p, 'geojson')}
-                              title="Exportar GeoJSON"
-                              style={{ color: '#2dd4bf' }}
-                            >
-                              <Download size={12} /> .JSON
-                            </button>
                           </div>
 
                           <table className="coords-table">
