@@ -21,8 +21,14 @@ export default function SupportModal({ isOpen, onClose }) {
     setStatus('loading');
     setErrorMsg('');
 
+    // Robust ID parsing: if the user provided the full URL, extract just the ID
+    let cleanId = formspreeId;
+    if (cleanId.includes('formspree.io/f/')) {
+      cleanId = cleanId.split('formspree.io/f/')[1];
+    }
+
     try {
-      const response = await fetch(`https://formspree.io/f/${formspreeId}`, {
+      const response = await fetch(`https://formspree.io/f/${cleanId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
