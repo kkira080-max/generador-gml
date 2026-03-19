@@ -1,8 +1,5 @@
-import React, { useState, useEffect } from 'react';
 import { Users, FileCheck, Download, Globe, Zap, Loader2, RefreshCw, AlertCircle } from 'lucide-react';
-
-const NAMESPACE = 'generador_gml_v100'; // New clean namespace
-const BASE_API_URL = 'https://api.counterapi.dev';
+import { supabase } from '../utils/supabaseClient';
 
 export default function Statistics({ localStats }) {
   const [onlineStats, setOnlineStats] = useState({ visits: 0, conversions: 0, downloads: 0 });
@@ -13,31 +10,25 @@ export default function Statistics({ localStats }) {
   const fetchOnlineStats = async () => {
     setLoadingOnline(true);
     setErrorSync(false);
-    console.log("Syncing with CounterAPI namespace:", NAMESPACE);
     
     try {
-      const endpoints = ['visits', 'conversions', 'downloads'];
-      const timestamp = Date.now();
+      const { data, error } = await supabase
+        .from('global_stats')
+        .select('visits, conversions, downloads')
+        .eq('id', 1)
+        .single();
       
-      const results = await Promise.all(
-        endpoints.map(id => 
-          fetch(`${BASE_API_URL}/v1/${NAMESPACE}/${id}/?t=${timestamp}`)
-            .then(res => {
-              if (!res.ok) throw new Error("API " + res.status);
-              return res.json();
-            })
-            .catch(() => ({ count: 0 }))
-        )
-      );
+      if (error) throw error;
 
-      setOnlineStats({
-        visits: results[0].count || 0,
-        conversions: results[1].count || 0,
-        downloads: results[2].count || 0
-      });
-      console.log("Online stats updated:", results);
+      if (data) {
+        setOnlineStats({
+          visits: data.visits || 0,
+          conversions: data.conversions || 0,
+          downloads: data.downloads || 0
+        });
+      }
     } catch (error) {
-      console.error("Sync error:", error);
+      console.error("Supabase fetch error:", error);
       setErrorSync(true);
     } finally {
       setLoadingOnline(false);

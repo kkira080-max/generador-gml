@@ -11,6 +11,7 @@ import { performIvgaCheck } from './utils/ivgaValidator';
 import { detectOverlaps, resolveOverlaps, validateTopology } from './utils/overlapResolver';
 import { calculateBbox, transformFromWGS84, transformToWGS84, calculatePolygonArea, closeRing } from './utils/geoUtils';
 import * as turf from '@turf/turf';
+import { supabase } from './utils/supabaseClient';
 
 
 function App() {
@@ -48,17 +49,15 @@ function App() {
     setStats(prev => ({ ...prev, visits: prev.visits + 1 }));
     
     // Real online sync
-    const baseApi = 'https://api.counterapi.dev';
-    const namespace = 'generador_gml_v100';
-    fetch(`${baseApi}/v1/${namespace}/visits/up/`).catch(() => {});
+    supabase.rpc('increment_stat', { row_id: 1, column_name: 'visits' })
+      .catch(error => console.error("Supabase sync error:", error));
   }, []);
 
   const incrementStat = (type) => {
     setStats(prev => ({ ...prev, [type]: prev[type] + 1 }));
     // Real online sync
-    const baseApi = 'https://api.counterapi.dev';
-    const namespace = 'generador_gml_v100';
-    fetch(`${baseApi}/v1/${namespace}/${type}/up/`).catch(() => {});
+    supabase.rpc('increment_stat', { row_id: 1, column_name: type === 'conversions' ? 'conversions' : 'downloads' })
+      .catch(error => console.error("Supabase sync error:", error));
   };
   // -------------------------
 
