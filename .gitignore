@@ -22,6 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-.env
-.env.local
-.env.*.local
+# .env files (removed for user deployment needs)
+# .env
+# .env.local
+# .env.*.local
