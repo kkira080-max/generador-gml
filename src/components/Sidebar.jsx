@@ -7,6 +7,7 @@ import { generateGMLv4 } from '../utils/gmlGenerator';
 import { generateDXF } from '../utils/dxfGenerator';
 import { validateTopology, calculatePerimeter } from '../utils/geoUtils';
 import Statistics from './Statistics';
+import { generateGeoJSON, generateKML } from '../utils/exportUtils';
 
 
 export default function Sidebar({
@@ -305,6 +306,31 @@ export default function Sidebar({
     const a = document.createElement('a');
     a.href = url;
     a.download = `${baseFileName}.${format}`;
+    a.click();
+    URL.revokeObjectURL(url);
+    onIncrementStat('downloads');
+  };
+
+  const handleExportSingle = (p, format) => {
+    let content = "";
+    let mimeType = "";
+    let extension = format;
+
+    if (format === 'geojson') {
+      content = generateGeoJSON([p]);
+      mimeType = 'application/json;charset=utf-8;';
+      extension = 'geojson';
+    } else if (format === 'kml') {
+      content = generateKML([p]);
+      mimeType = 'application/vnd.google-earth.kml+xml;charset=utf-8;';
+      extension = 'kml';
+    }
+
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${p.name || "parcela"}.${extension}`;
     a.click();
     URL.revokeObjectURL(url);
     onIncrementStat('downloads');
@@ -788,12 +814,28 @@ export default function Sidebar({
                             >
                               <Download size={12} /> .CSV
                             </button>
-                            <button
+                             <button
                               className="btn-tiny"
                               onClick={() => handleDownloadCoords(p, 'txt')}
                               title="Descargar TXT"
                             >
                               <Download size={12} /> .TXT
+                            </button>
+                            <button
+                              className="btn-tiny"
+                              onClick={() => handleExportSingle(p, 'kml')}
+                              title="Exportar KML"
+                              style={{ color: '#fb7185' }}
+                            >
+                              <Download size={12} /> .KML
+                            </button>
+                            <button
+                              className="btn-tiny"
+                              onClick={() => handleExportSingle(p, 'geojson')}
+                              title="Exportar GeoJSON"
+                              style={{ color: '#2dd4bf' }}
+                            >
+                              <Download size={12} /> .JSON
                             </button>
                           </div>
 
