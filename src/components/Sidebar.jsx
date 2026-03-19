@@ -387,7 +387,7 @@ export default function Sidebar({
           <Map className="accent-icon" style={{ width: 28, height: 28, color: 'var(--accent-primary)' }} />
           <h1>GENERADOR GML <span style={{ fontSize: '0.6rem', background: 'var(--accent-primary)', color: '#000', padding: '2px 6px', borderRadius: '4px', verticalAlign: 'middle', marginLeft: '4px' }}></span></h1>
         </div>
-        <p>Infraestructura de Datos Espaciales • Catastro INSPIRE  • GML V4 • .dxf </p>
+        <p>Infraestructura de Datos Espaciales • GML V4  • GML ICUC • .DXF </p>
       </header>
 
       {/* 1. DropZone (Sube tus ficheros) */}
@@ -518,8 +518,8 @@ export default function Sidebar({
       {/* 3. Estadísticas */}
       <Statistics localStats={stats} />
 
-      <button 
-        className="btn btn-secondary support-btn" 
+      <button
+        className="btn btn-secondary support-btn"
         onClick={onOpenSupportModal}
         style={{
           width: '100%',
@@ -814,7 +814,7 @@ export default function Sidebar({
                             >
                               <Download size={12} /> .CSV
                             </button>
-                             <button
+                            <button
                               className="btn-tiny"
                               onClick={() => handleDownloadCoords(p, 'txt')}
                               title="Descargar TXT"
