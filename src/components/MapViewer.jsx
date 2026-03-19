@@ -142,8 +142,21 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
       if (initialMap._isMeasuring) {
         // Enable measurements on the finished layer to keep labels visible
         layer.pm.enable({
-          measurements: { display: true }
+          measurements: { 
+            display: true,
+            totalLength: true,
+            segmentLength: true,
+            area: true,
+            showTooltip: true
+          }
         });
+        
+        // Manual override for visibility if Geoman is being finicky
+        if (layer.pm._measurements) {
+          layer.pm._measurements.display = true;
+          layer.pm._measurements.update();
+        }
+
         layer.bindPopup('Medición finalizada. <button onclick="this.parentNode.parentNode.remove()">Eliminar</button>');
         return;
       }
