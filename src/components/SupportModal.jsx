@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, Send, CheckCircle, Loader2, LifeBuoy } from 'lucide-react';
 
 export default function SupportModal({ isOpen, onClose }) {
-  const [formData, setFormData] = useState({ name: '', email: '', message: '' });
+  const [formData, setFormData] = useState({ name: '', email: '', confirmEmail: '', message: '' });
   const [status, setStatus] = useState('idle'); // idle, loading, success, error
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -14,6 +14,12 @@ export default function SupportModal({ isOpen, onClose }) {
     e.preventDefault();
     if (!formspreeId) {
       setErrorMsg('Error: ID de Formspree no configurado en .env (VITE_FORMSPREE_ID)');
+      setStatus('error');
+      return;
+    }
+
+    if (formData.email !== formData.confirmEmail) {
+      setErrorMsg('Los correos electrónicos no coinciden.');
       setStatus('error');
       return;
     }
@@ -36,7 +42,7 @@ export default function SupportModal({ isOpen, onClose }) {
 
       if (response.ok) {
         setStatus('success');
-        setFormData({ name: '', email: '', message: '' });
+        setFormData({ name: '', email: '', confirmEmail: '', message: '' });
       } else {
         throw new Error('Error al enviar el mensaje. Inténtalo de nuevo.');
       }
@@ -94,6 +100,18 @@ export default function SupportModal({ isOpen, onClose }) {
                   value={formData.email}
                   onChange={(e) => setFormData({...formData, email: e.target.value})}
                   placeholder="Ej: juan@email.com"
+                  style={{ width: '100%', padding: '10px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'white' }}
+                />
+              </div>
+
+              <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <label style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', fontWeight: '600' }}>Confirmar Email</label>
+                <input 
+                  type="email" 
+                  required 
+                  value={formData.confirmEmail}
+                  onChange={(e) => setFormData({...formData, confirmEmail: e.target.value})}
+                  placeholder="Repite tu email"
                   style={{ width: '100%', padding: '10px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'white' }}
                 />
               </div>
