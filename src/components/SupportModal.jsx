@@ -6,7 +6,7 @@ export default function SupportModal({ isOpen, onClose }) {
   const [status, setStatus] = useState('idle'); // idle, loading, success, error
   const [errorMsg, setErrorMsg] = useState('');
 
-  const formspreeId = import.meta.env.VITE_FORMSPREE_ID;
+  const formspreeId = import.meta.env.VITE_FORMSPREE_ID || 'mbdzwldz';
 
   if (!isOpen) return null;
 
