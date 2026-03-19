@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from 'react';
 import { Users, FileCheck, Download, Globe, Zap, Loader2, RefreshCw, AlertCircle } from 'lucide-react';
 import { supabase } from '../utils/supabaseClient';
 
