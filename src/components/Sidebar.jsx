@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { UploadCloud, FileJson, AlertCircle, AlertTriangle, Download, Trash2, Map, Eye, EyeOff, List, Building, Search, Loader2, LifeBuoy } from 'lucide-react';
 import JSZip from 'jszip';
 import { parseGML } from '../utils/gmlParser';
@@ -43,6 +43,38 @@ export default function Sidebar({
   const [errorMsg, setErrorMsg] = useState('');
   const [searchRefCat, setSearchRefCat] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  
+  // Refs for auto-scrolling to alerts/errors
+  const errorRef = useRef(null);
+  const adjustmentRef = useRef(null);
+  const husoAlertRef = useRef(null);
+  const ivgaRef = useRef(null);
+
+  // Auto-scroll logic
+  useEffect(() => {
+    if (errorMsg && errorRef.current) {
+      errorRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [errorMsg]);
+
+  useEffect(() => {
+    if (adjustmentSession && adjustmentRef.current) {
+      adjustmentRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [adjustmentSession]);
+
+  useEffect(() => {
+    const hasDxfWithoutHuso = parcels.some(p => p.filename && p.filename.toLowerCase().endsWith('.dxf')) && !huso;
+    if (hasDxfWithoutHuso && husoAlertRef.current) {
+      husoAlertRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [parcels, huso]);
+
+  useEffect(() => {
+    if (ivgaReport && ivgaRef.current) {
+      ivgaRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [ivgaReport]);
 
   const handleDrag = (e) => {
     e.preventDefault();
@@ -500,7 +532,7 @@ export default function Sidebar({
         </form>
 
         {errorMsg && (
-          <div style={{
+          <div ref={errorRef} style={{
             marginTop: '12px',
             color: '#ff4d4d',
             fontSize: '0.8rem',
@@ -542,7 +574,7 @@ export default function Sidebar({
 
 
       {adjustmentSession && (
-        <div className="adjustment-review-panel glass-card pulse-indicator" style={{
+        <div ref={adjustmentRef} className="adjustment-review-panel glass-card pulse-indicator" style={{
           background: 'rgba(245, 158, 11, 0.1)',
           border: '1px solid #f59e0b',
           padding: '16px',
@@ -859,7 +891,7 @@ export default function Sidebar({
             </div>
 
             {parcels.some(p => p.filename && p.filename.toLowerCase().endsWith('.dxf')) && !huso && (
-              <div style={{ color: 'var(--accent-warning)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', background: 'rgba(234, 179, 8, 0.1)', borderRadius: 8, marginBottom: '16px' }}>
+              <div ref={husoAlertRef} style={{ color: 'var(--accent-warning)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', background: 'rgba(234, 179, 8, 0.1)', borderRadius: 8, marginBottom: '16px' }}>
                 <AlertCircle size={14} style={{ flexShrink: 0 }} />
                 <span>El plano DXF se ha cargado pero está oculto. Por favor, selecciona su Sistema de Referencia (HUSO) abajo para situarlo en el mapa.</span>
               </div>
