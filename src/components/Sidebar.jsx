@@ -8,6 +8,7 @@ import { generateDXF } from '../utils/dxfGenerator';
 import { validateTopology, calculatePerimeter } from '../utils/geoUtils';
 import Statistics from './Statistics';
 import { generateGeoJSON, generateKML } from '../utils/exportUtils';
+import LegalModal from './LegalModal';
 
 
 export default function Sidebar({
@@ -42,6 +43,8 @@ export default function Sidebar({
   const [errorMsg, setErrorMsg] = useState('');
   const [searchRefCat, setSearchRefCat] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
+  const [legalModalType, setLegalModalType] = useState('legal'); // 'legal' or 'privacy'
 
   const handleDrag = (e) => {
     e.preventDefault();
@@ -906,6 +909,67 @@ export default function Sidebar({
           </>
         );
       })()}
+      {/* Footer Legal */}
+      <footer style={{
+        marginTop: '30px',
+        paddingTop: '15px',
+        borderTop: '1px solid var(--border-color)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px',
+        alignItems: 'center'
+      }}>
+        <div style={{ display: 'flex', gap: '15px', fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+          <span 
+            onClick={() => { setLegalModalType('legal'); setIsLegalModalOpen(true); }} 
+            style={{ cursor: 'pointer', transition: 'color 0.2s' }}
+            onMouseOver={(e) => e.target.style.color = 'var(--accent-primary)'}
+            onMouseOut={(e) => e.target.style.color = 'var(--text-secondary)'}
+          >
+            Aviso Legal
+          </span>
+          <span 
+            onClick={() => { setLegalModalType('privacy'); setIsLegalModalOpen(true); }} 
+            style={{ cursor: 'pointer', transition: 'color 0.2s' }}
+            onMouseOver={(e) => e.target.style.color = 'var(--accent-primary)'}
+            onMouseOut={(e) => e.target.style.color = 'var(--text-secondary)'}
+          >
+            Privacidad
+          </span>
+          <span 
+            onClick={() => { setLegalModalType('cookies'); setIsLegalModalOpen(true); }} 
+            style={{ cursor: 'pointer', transition: 'color 0.2s' }}
+            onMouseOver={(e) => e.target.style.color = 'var(--accent-primary)'}
+            onMouseOut={(e) => e.target.style.color = 'var(--text-secondary)'}
+          >
+            Cookies
+          </span>
+          <span 
+            onClick={onOpenSupportModal} 
+            style={{ cursor: 'pointer', transition: 'color 0.2s' }}
+            onMouseOver={(e) => e.target.style.color = 'var(--accent-primary)'}
+            onMouseOut={(e) => e.target.style.color = 'var(--text-secondary)'}
+          >
+            Contacto
+          </span>
+        </div>
+        <div style={{ 
+          fontSize: '0.65rem', 
+          color: 'rgba(255,255,255,0.4)', 
+          textAlign: 'center', 
+          marginTop: '10px',
+          lineHeight: '1.4'
+        }}>
+          <i><b>Desarrollada por profesionales, para quienes exigen resultados profesionales</b></i><br/>
+          — KIRAKIRA 2026
+        </div>
+      </footer>
+
+      <LegalModal 
+        isOpen={isLegalModalOpen} 
+        onClose={() => setIsLegalModalOpen(false)} 
+        type={legalModalType} 
+      />
     </div>
   );
 }
