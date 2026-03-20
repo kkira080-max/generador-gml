@@ -8,7 +8,6 @@ import { generateDXF } from '../utils/dxfGenerator';
 import { validateTopology, calculatePerimeter } from '../utils/geoUtils';
 import Statistics from './Statistics';
 import { generateGeoJSON, generateKML } from '../utils/exportUtils';
-import LegalModal from './LegalModal';
 
 
 export default function Sidebar({
@@ -36,15 +35,14 @@ export default function Sidebar({
   onFlyToLocation,
   stats,
   onIncrementStat,
-  onOpenSupportModal
+  onOpenSupportModal,
+  onOpenLegalModal
 }) {
 
   const [dragActive, setDragActive] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [searchRefCat, setSearchRefCat] = useState('');
   const [isSearching, setIsSearching] = useState(false);
-  const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
-  const [legalModalType, setLegalModalType] = useState('legal'); // 'legal' or 'privacy'
 
   const handleDrag = (e) => {
     e.preventDefault();
@@ -921,7 +919,7 @@ export default function Sidebar({
       }}>
         <div style={{ display: 'flex', gap: '15px', fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
           <span 
-            onClick={() => { setLegalModalType('legal'); setIsLegalModalOpen(true); }} 
+            onClick={() => onOpenLegalModal('legal')} 
             style={{ cursor: 'pointer', transition: 'color 0.2s' }}
             onMouseOver={(e) => e.target.style.color = 'var(--accent-primary)'}
             onMouseOut={(e) => e.target.style.color = 'var(--text-secondary)'}
@@ -929,7 +927,7 @@ export default function Sidebar({
             Aviso Legal
           </span>
           <span 
-            onClick={() => { setLegalModalType('privacy'); setIsLegalModalOpen(true); }} 
+            onClick={() => onOpenLegalModal('privacy')} 
             style={{ cursor: 'pointer', transition: 'color 0.2s' }}
             onMouseOver={(e) => e.target.style.color = 'var(--accent-primary)'}
             onMouseOut={(e) => e.target.style.color = 'var(--text-secondary)'}
@@ -937,7 +935,7 @@ export default function Sidebar({
             Privacidad
           </span>
           <span 
-            onClick={() => { setLegalModalType('cookies'); setIsLegalModalOpen(true); }} 
+            onClick={() => onOpenLegalModal('cookies')} 
             style={{ cursor: 'pointer', transition: 'color 0.2s' }}
             onMouseOver={(e) => e.target.style.color = 'var(--accent-primary)'}
             onMouseOut={(e) => e.target.style.color = 'var(--text-secondary)'}
@@ -964,12 +962,6 @@ export default function Sidebar({
           — KIRAKIRA 2026
         </div>
       </footer>
-
-      <LegalModal 
-        isOpen={isLegalModalOpen} 
-        onClose={() => setIsLegalModalOpen(false)} 
-        type={legalModalType} 
-      />
     </div>
   );
 }

@@ -12,6 +12,7 @@ import * as turf from '@turf/turf';
 import { supabase } from './utils/supabaseClient';
 import BuildingDataModal from './components/BuildingDataModal';
 import SupportModal from './components/SupportModal';
+import LegalModal from './components/LegalModal';
 
 
 function App() {
@@ -23,6 +24,8 @@ function App() {
   const [detectIslands, setDetectIslands] = useState(false);
   const [isBuildingModalOpen, setIsBuildingModalOpen] = useState(false);
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
+  const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
+  const [legalModalType, setLegalModalType] = useState('legal'); 
   const [buildingQueue, setBuildingQueue] = useState([]); // Kept for future or internal use if needed
   const [targetParcelForBuilding, setTargetParcelForBuilding] = useState(null);
   const [isProcessingCadastre, setIsProcessingCadastre] = useState(false);
@@ -594,6 +597,7 @@ function App() {
         stats={stats}
         onIncrementStat={incrementStat}
         onOpenSupportModal={() => setIsSupportModalOpen(true)}
+        onOpenLegalModal={(type) => { setLegalModalType(type); setIsLegalModalOpen(true); }}
       />
       <BuildingDataModal 
         isOpen={isBuildingModalOpen} 
@@ -605,6 +609,11 @@ function App() {
       <SupportModal 
         isOpen={isSupportModalOpen} 
         onClose={() => setIsSupportModalOpen(false)} 
+      />
+      <LegalModal 
+        isOpen={isLegalModalOpen} 
+        onClose={() => setIsLegalModalOpen(false)} 
+        type={legalModalType} 
       />
     </div>
   );
