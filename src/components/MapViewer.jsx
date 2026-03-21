@@ -6,7 +6,10 @@ import '@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css';
 import '@geoman-io/leaflet-geoman-free';
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
-import { calculatePolygonArea, calculatePerimeter, transformFromWGS84 } from '../utils/geoUtils';
+import { calculatePolygonArea, calculatePerimeter, transformFromWGS84, closeRing } from '../utils/geoUtils';
+import { fetchRcByCoordinates } from '../utils/cadastreService';
+import * as turf from '@turf/turf';
+import MapTools from './MapTools';
 
 let DefaultIcon = L.icon({
   iconUrl: icon,
@@ -18,12 +21,21 @@ L.Marker.prototype.options.icon = DefaultIcon;
 const SPAIN_CENTER = [40.463667, -3.74922];
 const DEFAULT_ZOOM = 6;
 
-export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDrawingCreated, adjustmentSession, onGeometryEdited, huso, flyToTarget }) {
+export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDrawingCreated, adjustmentSession, onGeometryEdited,  huso,
+  flyToTarget,
+  areaUnit,
+  setAreaUnit
+}) {
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
   const featuresLayer = useRef(null);
   const adjustmentLayers = useRef(new L.LayerGroup());
   const prevAdjustmentSession = useRef(adjustmentSession);
+
+  // New states for measurement tools
+  const [activeTool, setActiveTool] = React.useState(null);
+  const [measurements, setMeasurements] = React.useState({ distance: 0, area: 0, coords: null });
+  const activeToolRef = useRef(null);
 
   useEffect(() => {
     if (!mapRef.current || mapInstance.current) return;
@@ -103,7 +115,8 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
     initialMap.pm.addControls({
       position: 'topleft',
       drawCircleMarker: false,
-      drawPolyline: true,
+      drawPolyline: false,
+      drawPolygon: false,
       drawRectangle: false,
       drawCircle: false,
       drawMarker: false,
@@ -190,6 +203,97 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
 
     initialMap.on('mousemove', onMouseMove);
 
+    // Coordinate and Cadastre tool click handler
+    const onMapClick = async (e) => {
+      if (activeToolRef.current === 'coordinates' || activeToolRef.current === 'go_to_cadastre') {
+        const { lat, lng } = e.latlng;
+        const epsgCode = `EPSG:${huso || '25830'}`;
+        try {
+          const utm = proj4('EPSG:4326', epsgCode, [lng, lat]);
+          
+          if (activeToolRef.current === 'go_to_cadastre') {
+             if (!huso) {
+                 alert("Por favor, selecciona primero tu Sistema de Referencia (HUSO) en el panel lateral para poder llevarte al lugar exacto del Catastro.");
+                 return;
+             }
+
+             // We fetch the precise Referencia Catastral at this coordinate
+             // This is the only 100% reliable way to force the Sede Electrónica to zoom correctly
+             // without showing the search dialog modal.
+             const rc = await fetchRcByCoordinates(utm[0], utm[1], epsgCode);
+             
+             if (rc) {
+                 const url = `https://www1.sedecatastro.gob.es/Cartografia/mapa.aspx?refcat=${rc}`;
+                 window.open(url, '_blank');
+             } else {
+                 alert("No se ha detectado ninguna parcela del Catastro en las coordenadas indicadas. Intenta hacer clic un poco más al interior de la parcela.");
+             }
+             return;
+          }
+
+          setMeasurements(prev => ({
+            ...prev,
+            coords: { x: utm[0], y: utm[1], epsg: epsgCode }
+          }));
+          
+          L.popup()
+            .setLatLng(e.latlng)
+            .setContent(`
+              <div style="font-family: monospace; font-size: 11px; color: #38bdf8; background: #000; padding: 5px; border-radius: 4px;">
+                <b>COORDINADAS UTM</b><br/>
+                X: ${utm[0].toFixed(3)}<br/>
+                Y: ${utm[1].toFixed(3)}<br/>
+                EPSG: ${huso || '25830'}
+              </div>
+            `)
+            .openOn(initialMap);
+        } catch (err) {
+          console.error("Error calculating coordinates", err);
+        }
+      }
+    };
+    initialMap.on('click', onMapClick);
+
+    // Handle Geoman drawing events for real-time measurements
+    initialMap.on('pm:drawstart', (e) => {
+      setMeasurements({ distance: 0, area: 0, coords: null });
+      const workingLayer = e.workingLayer;
+      
+      if (workingLayer) {
+        workingLayer.on('pm:vertexadded', (v) => {
+          try {
+            if (activeToolRef.current === 'distance') {
+              const latlngs = workingLayer.getLatLngs();
+              let dist = 0;
+              for (let i = 0; i < latlngs.length - 1; i++) {
+                dist += latlngs[i].distanceTo(latlngs[i+1]);
+              }
+              setMeasurements(prev => ({ ...prev, distance: dist }));
+            } else if (activeToolRef.current === 'area') {
+               // Area is tricky to compute live with open polygons 
+               // Geoman handles live area in its own tooltip. We update on finish mostly.
+               // But if we have at least 3 points, we can close the ring for a live preview
+               const latlngs = workingLayer.getLatLngs();
+               if (latlngs && latlngs.length >= 3) {
+                  // Simulate closed polygon for area calculation
+                  const closedLatLngs = [...latlngs, latlngs[0]];
+                  
+                  // Use same projection logic as App.jsx to ensure exact match
+                  const targetHuso = huso || '25830';
+                  const wgs84Coords = closedLatLngs.map(ll => [ll.lng, ll.lat]);
+                  const projectedCoords = transformFromWGS84(wgs84Coords, targetHuso);
+                  
+                  const areaM2 = calculatePolygonArea(projectedCoords);
+                  setMeasurements(prev => ({ ...prev, area: areaM2 }));
+               }
+            }
+          } catch (err) {
+            console.error(err);
+          }
+        });
+      }
+    });
+
     mapInstance.current = initialMap;
     featuresLayer.current = L.featureGroup().addTo(initialMap);
     adjustmentLayers.current.addTo(initialMap);
@@ -238,8 +342,15 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
       });
 
       geojson.eachLayer((layer) => {
-        // Default tooltip showing Name and Area
-        const areaStr = p.area ? `${p.area.toLocaleString('es-ES')} m²` : 'Superficie no disp.';
+        let areaStr = 'Superficie no disp.';
+        if (p.area) {
+          if (p.area >= 10000) {
+            areaStr = `${(p.area / 10000).toLocaleString('es-ES', { maximumFractionDigits: 4 })} ha`;
+          } else {
+            areaStr = `${p.area.toLocaleString('es-ES', { maximumFractionDigits: 2 })} m²`;
+          }
+        }
+        
         const defaultTooltip = `
           <div class="custom-tooltip">
             <div class="value-name">${p.name}</div>
@@ -457,9 +568,74 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
     };
   }, [flyToTarget]);
 
+  // Effect to handle tool changes
+  useEffect(() => {
+    if (!mapInstance.current) return;
+    const map = mapInstance.current;
+    activeToolRef.current = activeTool;
+
+    // Disable all drawing modes first
+    map.pm.disableDraw();
+
+    if (activeTool === 'distance') {
+      map.pm.enableDraw('Line', { finishOn: 'dblclick' });
+    } else if (activeTool === 'area') {
+      map.pm.enableDraw('Polygon', { finishOn: 'dblclick' });
+    } else if (activeTool === 'coordinates' || activeTool === 'go_to_cadastre') {
+      // Handled by the click listener
+    }
+
+    return () => {};
+  }, [activeTool]);
+
+  // Update measurements on completion
+  useEffect(() => {
+    if (!mapInstance.current) return;
+    const map = mapInstance.current;
+
+    const onPmCreate = (e) => {
+      if (activeToolRef.current === 'distance' || activeToolRef.current === 'area') {
+        const layer = e.layer;
+        
+        try {
+          if (activeToolRef.current === 'area') {
+            const geojson = layer.toGeoJSON();
+            const targetHuso = huso || '25830';
+            
+            if (geojson.geometry && geojson.geometry.type === 'Polygon') {
+               const projectedRing = closeRing(transformFromWGS84(geojson.geometry.coordinates[0], targetHuso));
+               const areaM2 = calculatePolygonArea(projectedRing);
+               setMeasurements(prev => ({ ...prev, area: areaM2 }));
+            }
+          } else if (activeToolRef.current === 'distance') {
+            const latlngs = layer.getLatLngs();
+            let dist = 0;
+            for (let i = 0; i < latlngs.length - 1; i++) {
+              dist += latlngs[i].distanceTo(latlngs[i+1]);
+            }
+            setMeasurements(prev => ({ ...prev, distance: dist }));
+          }
+        } catch (err) {
+          console.error("Measurement error:", err);
+        }
+      }
+    };
+
+    map.on('pm:create', onPmCreate);
+    return () => map.off('pm:create', onPmCreate);
+  }, []);
+
   return (
     <div style={{ height: '100%', width: '100%', position: 'relative' }}>
       <div ref={mapRef} style={{ height: '100%', width: '100%', zIndex: 1, position: 'relative' }}></div>
+      
+      <MapTools 
+        activeTool={activeTool} 
+        onToolChange={setActiveTool} 
+        measurements={measurements}
+        areaUnit={areaUnit}
+        setAreaUnit={setAreaUnit}
+      />
     </div>
   );
 }

@@ -90,70 +90,152 @@ const parseWfsGml = (xmlString, huso) => {
     
     const label = feature.getElementsByTagNameNS('*', 'label')[0]?.textContent || ref;
     
-    // Extract geometry (can be in posList or pos elements)
-    const posLists = feature.getElementsByTagNameNS('*', 'posList');
-    const rings = [];
-    
-    if (posLists.length > 0) {
-      for (let j = 0; j < posLists.length; j++) {
-        const coordsText = posLists[j].textContent.trim().split(/\s+/);
-        const ring = [];
-        for (let k = 0; k < coordsText.length; k += 2) {
-          if (coordsText[k] && coordsText[k+1]) {
-            // WFS 2.0 with EPSG:25830 natively returns Easting (X), Northing (Y)
-            const x = parseFloat(coordsText[k]);
-            const y = parseFloat(coordsText[k+1]);
-            ring.push([x, y]);
+    // Extract geometry preserving MultiPolygon structure (Islands and Holes)
+    const multiPolygon = [];
+    const surfaces = feature.getElementsByTagNameNS('*', 'Surface');
+    const polygonPatches = feature.getElementsByTagNameNS('*', 'PolygonPatch');
+    // En WFS de Catastro suelen venir como Surface o PolygonPatch
+    const targetSurfaces = surfaces.length > 0 ? surfaces : polygonPatches;
+
+    for (let s = 0; s < targetSurfaces.length; s++) {
+      const surface = targetSurfaces[s];
+      const polygonRings = []; // [exteriorRing, interior1, interior2...]
+
+      const extractRing = (node) => {
+        const ringNode = node.getElementsByTagNameNS('*', 'LinearRing')[0];
+        if (!ringNode) return null;
+        const posList = ringNode.getElementsByTagNameNS('*', 'posList')[0];
+        if (posList) {
+          const coordsText = posList.textContent.trim().split(/\s+/);
+          const ring = [];
+          for (let k = 0; k < coordsText.length; k += 2) {
+            if (coordsText[k] && coordsText[k+1]) {
+              ring.push([parseFloat(coordsText[k]), parseFloat(coordsText[k+1])]);
+            }
+          }
+          return ring.length > 0 ? ring : null;
+        } else {
+          // Fallback to pos
+          const poses = ringNode.getElementsByTagNameNS('*', 'pos');
+          if (poses.length > 0) {
+            const ring = [];
+            for (let j = 0; j < poses.length; j++) {
+              const coordsText = poses[j].textContent.trim().split(/\s+/);
+              ring.push([parseFloat(coordsText[0]), parseFloat(coordsText[1])]);
+            }
+            return ring.length > 0 ? ring : null;
           }
         }
-        if (ring.length > 0) rings.push(ring);
+        return null;
+      };
+
+      // 1. Exterior ring
+      const exteriors = surface.getElementsByTagNameNS('*', 'exterior');
+      if (exteriors.length > 0) {
+        const extRing = extractRing(exteriors[0]);
+        if (extRing) polygonRings.push(extRing);
+      } else {
+        // If there is no strict exterior/interior tag, just parse the first LinearRing we find inside this surface
+        const firstRing = extractRing(surface);
+        if (firstRing) polygonRings.push(firstRing);
       }
-    } else {
-      // Fallback to pos elements if posList is missing (unlikely in WFS 2.0 but safe)
-      const poses = feature.getElementsByTagNameNS('*', 'pos');
-      if (poses.length > 0) {
+
+      // 2. Interior holes
+      const interiors = surface.getElementsByTagNameNS('*', 'interior');
+      for (let i = 0; i < interiors.length; i++) {
+        const intRing = extractRing(interiors[i]);
+        if (intRing) polygonRings.push(intRing);
+      }
+
+      if (polygonRings.length > 0) {
+        multiPolygon.push(polygonRings);
+      }
+    }
+
+    // Si por algún motivo el parseo estructural falla, hacemos un fallback simple a la primera posList como polygon simple
+    if (multiPolygon.length === 0) {
+      const fallbackPos = feature.getElementsByTagNameNS('*', 'posList')[0];
+      if (fallbackPos) {
+        const coordsText = fallbackPos.textContent.trim().split(/\s+/);
         const ring = [];
-        for (let j = 0; j < poses.length; j++) {
-          const coordsText = poses[j].textContent.trim().split(/\s+/);
-          const x = parseFloat(coordsText[0]);
-          const y = parseFloat(coordsText[1]);
-          ring.push([x, y]);
+        for (let k = 0; k < coordsText.length; k += 2) {
+          if (coordsText[k] && coordsText[k+1]) ring.push([parseFloat(coordsText[k]), parseFloat(coordsText[k+1])]);
         }
-        rings.push(ring);
+        if (ring.length > 0) multiPolygon.push([ring]);
       }
     }
     
-    if (rings.length > 0) {
-      // Data is returned natively in Target UTM EPSG thanks to the SRSNAME parameter.
-      // Unlike 4258, UTM coords (X, Y) are returned in order (Easting, Northing).
+    if (multiPolygon.length > 0) {
       const utmEpsg = huso.startsWith('EPSG:') ? huso : `EPSG:${huso}`;
       
-      const utmRings = rings; 
-
-      // And geometry in WGS84 for the map
-      const wgs84Rings = rings.map(ring => transformToWGS84(ring, utmEpsg));
-
-      // MAINTAIN SOURCE PRECISION (No rounding to avoid gaps)
-      const roundedUtmRings = utmRings; // Keep raw precision from WFS
-      const areaM2 = computeAreaUTM(roundedUtmRings);
+      // Calculate Area (MultiPolygon)
+      let areaM2 = 0;
+      multiPolygon.forEach(poly => {
+         if (poly.length > 0) {
+            areaM2 += computeAreaUTM([poly[0]]); // Add exterior
+            for (let i=1; i<poly.length; i++) areaM2 -= computeAreaUTM([poly[i]]); // Subtract holes
+         }
+      });
+      
+      // WGS84 rings for UI
+      const wgs84Multi = multiPolygon.map(poly => 
+         poly.map(ring => transformToWGS84(ring, utmEpsg))
+      );
 
       results.push({
         id: `cadastre-${ref}-${i}`,
         name: ref,
         label: label,
         filename: `${ref}.gml`,
-        originalCoords: roundedUtmRings,
-        area: Math.round(areaM2), // m² for GML v4 cp:areaValue
+        originalCoords: multiPolygon, // Esto AHORA ES un verdadero MultiPolygon: [ [ext, int], [ext] ]
+        area: Math.round(Math.abs(areaM2)),
         huso: huso,
         isCadastre: true,
         geometry: {
-          type: 'Polygon',
-          coordinates: wgs84Rings
+          type: 'MultiPolygon',
+          coordinates: wgs84Multi
         }
       });
-
     }
   }
   
   return results;
+};
+
+/**
+ * Gets the Cadastral Reference (RC) for a given X,Y coordinate pair.
+ * Useful for deep-linking into Sede Electrónica.
+ */
+export const fetchRcByCoordinates = async (x, y, epsg) => {
+  const isBrowser = typeof window !== 'undefined';
+  const baseUrl = isBrowser ? '/catastro/' : 'http://ovc.catastro.meh.es/'; // Using proxy if in browser
+  
+  const targetEpsg = epsg.startsWith('EPSG:') ? epsg : `EPSG:${epsg}`;
+  
+  // Endpoint: /ovcservweb/OVCSWLocalizacionRC/OVCCoordenadas.asmx/Consulta_RCCOOR
+  const url = `${baseUrl}ovcservweb/OVCSWLocalizacionRC/OVCCoordenadas.asmx/Consulta_RCCOOR?SRS=${targetEpsg}&Coordenada_X=${x}&Coordenada_Y=${y}`;
+  
+  console.log("Fetching RC by coords:", url);
+  
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Network response was not ok");
+    const text = await response.text();
+    
+    const parser = new DOMParser();
+    const xml = parser.parseFromString(text, 'text/xml');
+    
+    // The response has <coor><pc1>XXXXXXX</pc1><pc2>XXXXXXX</pc2></coor>
+    const pc1Node = xml.getElementsByTagName('pc1')[0];
+    const pc2Node = xml.getElementsByTagName('pc2')[0];
+    
+    if (pc1Node && pc2Node) {
+      return pc1Node.textContent.trim() + pc2Node.textContent.trim();
+    }
+    
+    return null;
+  } catch (err) {
+    console.error("Error fetching RC from coordinates:", err);
+    return null;
+  }
 };

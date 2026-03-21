@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, FileJson, AlertCircle, AlertTriangle, Download, Trash2, Map, Eye, EyeOff, List, Building, Search, Loader2, LifeBuoy } from 'lucide-react';
+import { UploadCloud, FileJson, AlertCircle, AlertTriangle, Download, Trash2, Map, Eye, EyeOff, List, Building, Search, Loader2, LifeBuoy, ShieldCheck, ShieldAlert, Shield, Info } from 'lucide-react';
 import JSZip from 'jszip';
 import { parseGML } from '../utils/gmlParser';
 import { parseDXF } from '../utils/dxfParser';
 import { generateGMLv4 } from '../utils/gmlGenerator';
 import { generateDXF } from '../utils/dxfGenerator';
-import { validateTopology, calculatePerimeter } from '../utils/geoUtils';
+import { validateTopology, calculatePerimeter, calculateBbox, preValidateMacro } from '../utils/geoUtils';
+import { fetchParcelsByBbox } from '../utils/cadastreService';
 import Statistics from './Statistics';
 import { generateGeoJSON, generateKML } from '../utils/exportUtils';
 
@@ -23,6 +24,8 @@ export default function Sidebar({
   isProcessingCadastre,
   huso,
   setHuso,
+  areaUnit,
+  setAreaUnit,
   detectIslands,
   setDetectIslands,
   adjustmentSession,
@@ -43,6 +46,26 @@ export default function Sidebar({
   const [errorMsg, setErrorMsg] = useState('');
   const [searchRefCat, setSearchRefCat] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [randomQuote, setRandomQuote] = useState('');
+  const [isPreValidating, setIsPreValidating] = useState(false);
+  const [macroValidationResult, setMacroValidationResult] = useState(null);
+
+  const quotes = [
+    "Lo que no se define no se puede medir. Lo que no se mide, no se puede mejorar. — Lord Kelvin",
+    "La perfección no se alcanza cuando no hay nada más que añadir, sino cuando no hay nada más que quitar. — A. de Saint-Exupéry",
+    "El mapa no es el territorio. — Alfred Korzybski",
+    "Dios está en los detalles. — Ludwig Mies van der Rohe",
+    "En teoría, no hay diferencia entre teoría y práctica. En la práctica, sí la hay. — Yogi Berra",
+    "La simplicidad es la máxima sofisticación. — Leonardo da Vinci",
+    "La tecnología es mejor cuando une a las personas. — Matt Mullenweg",
+    "La ingeniería es el arte de concebir lo imposible. — Anónimo",
+    "Desarrollada por profesionales, para quienes exigen resultados profesionales."
+  ];
+
+  useEffect(() => {
+    const pick = quotes[Math.floor(Math.random() * quotes.length)];
+    setRandomQuote(pick);
+  }, []);
   
   // Refs for auto-scrolling to alerts/errors
   const errorRef = useRef(null);
@@ -94,6 +117,51 @@ export default function Sidebar({
 
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       processFiles(e.dataTransfer.files);
+    }
+  };
+
+  const handlePreValidateGlobal = async () => {
+    if (!huso) {
+      setErrorMsg('Por favor, selecciona un HUSO UTM antes de realizar la pre-validación.');
+      if (husoAlertRef.current) husoAlertRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    if (parcels.length === 0) {
+      setErrorMsg('No hay parcelas cargadas para validar.');
+      return;
+    }
+
+    setIsPreValidating(true);
+    setErrorMsg('');
+    setMacroValidationResult(null);
+
+    try {
+      // Obtener el Bounding Box global de TODAS las parcelas juntas
+      const allRings = parcels.flatMap(p => p.originalCoords || []);
+      if (allRings.length === 0) throw new Error("Las parcelas no tienen coordenadas válidas.");
+
+      const bbox = calculateBbox(allRings);
+
+      // Fetch parcelas oficiales interceptando ese bounding box global
+      const officialParcels = await fetchParcelsByBbox(bbox, huso);
+
+      if (!officialParcels || officialParcels.length === 0) {
+        throw new Error("El servicio del Catastro no devolvió parcelas en esta zona. Comprueba el HUSO.");
+      }
+
+      // Ejecutar el motor de macro-validación Turf.js
+      const result = preValidateMacro(parcels, officialParcels);
+      setMacroValidationResult(result);
+
+      if (ivgaRef.current) {
+        ivgaRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    } catch (err) {
+      console.error("Error en macro-validación global:", err);
+      setErrorMsg("Error en la Pre-Validación: " + (err.message || 'Error desconocido.'));
+    } finally {
+      setIsPreValidating(false);
     }
   };
 
@@ -344,7 +412,7 @@ export default function Sidebar({
     onIncrementStat('downloads');
   };
 
-  const handleExportSingle = (p, format) => {
+  const handleExportSingle = async (p, format) => {
     let content = "";
     let mimeType = "";
     let extension = format;
@@ -353,19 +421,29 @@ export default function Sidebar({
       content = generateGeoJSON([p]);
       mimeType = 'application/json;charset=utf-8;';
       extension = 'geojson';
+      
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${p.name || "parcela"}.${extension}`;
+      a.click();
+      URL.revokeObjectURL(url);
     } else if (format === 'kml') {
       content = generateKML([p]);
-      mimeType = 'application/vnd.google-earth.kml+xml;charset=utf-8;';
-      extension = 'kml';
+      // For KMZ we need to zip it
+      const zip = new JSZip();
+      zip.file("doc.kml", content);
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${p.name || "parcela"}.kmz`;
+      a.click();
+      URL.revokeObjectURL(url);
     }
-
-    const blob = new Blob([content], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${p.name || "parcela"}.${extension}`;
-    a.click();
-    URL.revokeObjectURL(url);
+    
     onIncrementStat('downloads');
   };
 
@@ -431,7 +509,7 @@ export default function Sidebar({
         onDragOver={handleDrag}
         onDrop={handleDrop}
         onClick={() => document.getElementById('file-upload').click()}
-        style={{ marginBottom: '20px' }}
+        style={{ marginBottom: '20px', borderRadius: '0' }}
       >
         <UploadCloud className="drop-icon" />
         <div>
@@ -449,13 +527,10 @@ export default function Sidebar({
       </div>
 
       {/* 2. Búsqueda Catastral */}
-      <div className="search-section glass-card" style={{
+      <div className="form-group glass-card" style={{
         marginBottom: '20px',
-        padding: '20px',
-        border: '1px solid var(--accent-primary)',
-        boxShadow: '0 4px 15px rgba(0,0,0,0.3), 0 0 10px rgba(0,255,157,0.1)',
-        background: 'rgba(255,255,255,0.03)',
-        borderRadius: '12px'
+        padding: '16px',
+        border: '1px solid rgba(255,255,255,0.05)'
       }}>
         <label style={{
           fontSize: '0.8rem',
@@ -485,7 +560,7 @@ export default function Sidebar({
                 padding: '12px 14px',
                 background: 'rgba(0,0,0,0.4)',
                 border: '2px solid rgba(255,255,255,0.1)',
-                borderRadius: '8px',
+                borderRadius: '0',
                 color: 'var(--accent-primary)',
                 fontSize: '1rem',
                 fontFamily: 'monospace',
@@ -510,15 +585,14 @@ export default function Sidebar({
             style={{
               width: '100%',
               padding: '12px',
-              borderRadius: '8px',
+              borderRadius: '0',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: '10px',
               fontSize: '0.9rem',
               fontWeight: 'bold',
-              height: '48px',
-              boxShadow: '0 4px 10px rgba(0,255,157,0.2)'
+              height: '48px'
             }}
           >
             {isSearching ? (
@@ -546,6 +620,40 @@ export default function Sidebar({
             <AlertCircle size={14} /> {errorMsg}
           </div>
         )}
+      </div>
+
+      <div className="form-group glass-card" style={{ marginBottom: '20px', padding: '16px', border: '1px solid rgba(255,255,255,0.05)' }}>
+        <label htmlFor="huso" style={{ 
+          fontSize: '0.8rem', fontWeight: 'bold', color: 'var(--accent-primary)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' 
+        }}>SISTEMA DE REFERENCIA (EPSG)</label>
+
+        {parcels.some(p => p.filename && p.filename.toLowerCase().endsWith('.dxf')) && !huso && (
+          <div ref={husoAlertRef} style={{ color: 'var(--accent-warning)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', background: 'rgba(234, 179, 8, 0.1)', borderRadius: 8, marginBottom: '12px', border: '1px solid rgba(234, 179, 8, 0.3)' }}>
+            <AlertCircle size={14} style={{ flexShrink: 0 }} />
+            <span>El plano DXF se ha cargado. Selecciona su HUSO aquí para situarlo en el mapa.</span>
+          </div>
+        )}
+
+        <select id="huso" value={huso} onChange={(e) => { setHuso(e.target.value); setErrorMsg(''); }} style={{
+          width: '100%', padding: '10px', background: 'rgba(0,0,0,0.4)', color: 'var(--text-primary)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '0'
+        }}>
+          <option value="">-- Selecciona HUSO --</option>
+          <optgroup label="Península y Baleares (ETRS89)">
+            <option value="25827">HUSO 27 (EPSG:25827)</option>
+            <option value="25828">HUSO 28 (EPSG:25828)</option>
+            <option value="25829">HUSO 29 (EPSG:25829)</option>
+            <option value="25830">HUSO 30 (EPSG:25830)</option>
+            <option value="25831">HUSO 31 / Baleares (EPSG:25831)</option>
+          </optgroup>
+          <optgroup label="Islas Canarias (REGCAN95 / WGS84)">
+            <option value="4082">HUSO 27 (EPSG:4082 REGCAN95)</option>
+            <option value="4083">HUSO 28 (EPSG:4083 REGCAN95)</option>
+            <option value="32628">HUSO 28 (EPSG:32628 WGS84)</option>
+          </optgroup>
+        </select>
+        <p style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', marginTop: '8px', lineHeight: '1.3' }}>
+          Obligatorio para herramientas Catastrales, exportar DXF, o ver Coordenadas.
+        </p>
       </div>
 
       {/* 3. Estadísticas */}
@@ -685,7 +793,61 @@ export default function Sidebar({
                 );
               })()}
 
-              <div style={{ marginBottom: '16px' }}></div>
+              <div ref={ivgaRef} style={{ marginBottom: '16px' }}>
+                 <button 
+                   onClick={handlePreValidateGlobal} 
+                   className="btn btn-primary pulse-indicator" 
+                   style={{ width: '100%', padding: '10px 15px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '0.8rem', background: 'linear-gradient(45deg, #10b981, #059669)', border: 'none', boxShadow: '0 4px 15px rgba(16, 185, 129, 0.2)' }}
+                   disabled={isPreValidating}
+                 >
+                   {isPreValidating ? <Loader2 className="animate-spin" size={18} /> : <ShieldCheck size={18} />} 
+                   {isPreValidating ? 'CALCULANDO...' : 'PRE-VALIDACIÓN CATASTRAL (IVGA)'}
+                 </button>
+              </div>
+
+              {macroValidationResult && (() => {
+                 const isWarning = macroValidationResult.isValid && macroValidationResult.message.includes('Advertencia');
+                 const color = macroValidationResult.isValid ? (isWarning ? '#f59e0b' : '#10b981') : '#ef4444';
+                 const bgColor = macroValidationResult.isValid ? (isWarning ? 'rgba(245, 158, 11, 0.05)' : 'rgba(16, 185, 129, 0.05)') : 'rgba(239, 68, 68, 0.05)';
+                 const Icon = macroValidationResult.isValid ? (isWarning ? AlertTriangle : ShieldCheck) : ShieldAlert;
+
+                 return (
+                  <div className="glass-card" style={{ padding: '15px', marginBottom: '16px', background: bgColor, borderLeft: `3px solid ${color}`}}>
+                    <h3 style={{ fontSize: '0.85rem', color: color, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                      <Icon size={18} />
+                      RESULTADO: {macroValidationResult.isValid ? 'POSITIVO' : 'NEGATIVO'}
+                    </h3>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '10px', lineHeight: '1.4' }}>
+                      {macroValidationResult.message}
+                    </p>
+                    
+                    {macroValidationResult.userArea !== undefined && (
+                      <div style={{ fontSize: '0.7rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '10px', paddingBottom: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <div><strong style={{color:'var(--text-primary)'}}>Topografía:</strong> {(macroValidationResult.userArea).toFixed(2)} m²</div>
+                        <div><strong style={{color:'var(--text-primary)'}}>Catastro act.:</strong> {(macroValidationResult.officialArea).toFixed(2)} m²</div>
+                      </div>
+                    )}
+
+                    <div style={{ 
+                      display: 'flex', 
+                      gap: '8px', 
+                      padding: '8px', 
+                      background: 'rgba(56, 189, 248, 0.03)', 
+                      borderRadius: '4px',
+                      border: '1px solid rgba(56, 189, 248, 0.1)'
+                    }}>
+                      <Info size={14} style={{ color: '#38bdf8', flexShrink: 0, marginTop: '1px' }} />
+                      <p style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.5)', lineHeight: '1.3', margin: 0 }}>
+                        <strong style={{ color: '#38bdf8' }}>NOTA:</strong> Este resultado es puramente informativo y basado en cálculos locales. 
+                        <strong> Es obligatorio</strong> realizar la validación final en la 
+                        <a href="https://www2.catastro.meh.es/Sede/Pags/IEDG/ValidaGML.aspx" target="_blank" rel="noopener noreferrer" style={{ color: '#38bdf8', textDecoration: 'underline', marginLeft: '3px' }}>
+                          Sede Electrónica del Catastro
+                        </a>.
+                      </p>
+                    </div>
+                  </div>
+                 );
+              })()}
 
               <div className="parcel-list">
                 {parcels.map(p => {
@@ -765,7 +927,13 @@ export default function Sidebar({
                               Área Const.: {p.metadata.officialArea.toLocaleString('es-ES')} m²
                             </span>
                           ) : (
-                            <span style={{ whiteSpace: 'nowrap' }}>{p.area ? `${p.area.toLocaleString('es-ES')} m²` : ''}</span>
+                            <span style={{ whiteSpace: 'nowrap' }}>
+                              {p.area ? (() => {
+                                if (areaUnit === 'ha') return `${(p.area / 10000).toLocaleString('es-ES', { maximumFractionDigits: 4 })} ha`;
+                                if (areaUnit === 'km2') return `${(p.area / 1000000).toLocaleString('es-ES', { maximumFractionDigits: 6 })} km²`;
+                                return `${p.area.toLocaleString('es-ES', { maximumFractionDigits: 2 })} m²`;
+                              })() : ''}
+                            </span>
                           )}
 
                           {p.isBuilding && p.metadata?.condition && (
@@ -890,31 +1058,6 @@ export default function Sidebar({
               </div>
             </div>
 
-            {parcels.some(p => p.filename && p.filename.toLowerCase().endsWith('.dxf')) && !huso && (
-              <div ref={husoAlertRef} style={{ color: 'var(--accent-warning)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', background: 'rgba(234, 179, 8, 0.1)', borderRadius: 8, marginBottom: '16px' }}>
-                <AlertCircle size={14} style={{ flexShrink: 0 }} />
-                <span>El plano DXF se ha cargado pero está oculto. Por favor, selecciona su Sistema de Referencia (HUSO) abajo para situarlo en el mapa.</span>
-              </div>
-            )}
-
-            <div className="form-group">
-              <label htmlFor="huso">Sistema de Referencia (HUSO/EPSG)</label>
-              <select id="huso" value={huso} onChange={(e) => { setHuso(e.target.value); setErrorMsg(''); }}>
-                <option value="">-- Selecciona HUSO --</option>
-                <optgroup label="Península y Baleares (ETRS89)">
-                  <option value="25827">HUSO 27 (EPSG:25827)</option>
-                  <option value="25828">HUSO 28 (EPSG:25828)</option>
-                  <option value="25829">HUSO 29 (EPSG:25829)</option>
-                  <option value="25830">HUSO 30 (EPSG:25830)</option>
-                  <option value="25831">HUSO 31 / Baleares (EPSG:25831)</option>
-                </optgroup>
-                <optgroup label="Islas Canarias (REGCAN95 / WGS84)">
-                  <option value="4082">HUSO 27 (EPSG:4082 REGCAN95)</option>
-                  <option value="4083">HUSO 28 (EPSG:4083 REGCAN95)</option>
-                  <option value="32628">HUSO 28 (EPSG:32628 WGS84)</option>
-                </optgroup>
-              </select>
-            </div>
 
             <div className="switch-group">
               <div className="switch-label">
@@ -985,13 +1128,19 @@ export default function Sidebar({
         </div>
         <div style={{ 
           fontSize: '0.65rem', 
-          color: 'rgba(255,255,255,0.4)', 
+          color: 'var(--text-secondary)',
+          opacity: 0.7,
           textAlign: 'center', 
-          marginTop: '10px',
-          lineHeight: '1.4'
+          marginTop: '15px',
+          lineHeight: '1.5',
+          letterSpacing: '0.02em',
+          borderTop: '1px solid rgba(255,255,255,0.03)',
+          paddingTop: '15px'
         }}>
-          <i><b>Desarrollada por profesionales, para quienes exigen resultados profesionales</b></i><br/>
-          — KIRAKIRA 2026
+          <i>{randomQuote}</i><br/>
+          <span style={{ color: 'var(--accent-primary)', fontWeight: 800, marginTop: '5px', display: 'inline-block' }}>
+            — KIRAKIRA 2026
+          </span>
         </div>
       </footer>
     </div>

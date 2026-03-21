@@ -38,11 +38,11 @@ export const generateKML = (parcels) => {
     <name>Exportación GML Generator</name>
     <Style id="polygonStyle">
       <LineStyle>
-        <color>ff00ff00</color>
+        <color>ff0000ff</color>
         <width>2</width>
       </LineStyle>
       <PolyStyle>
-        <color>4000ff00</color>
+        <fill>0</fill>
       </PolyStyle>
     </Style>
     <Style id="lineStyle">

@@ -145,7 +145,7 @@ export default function Statistics({ localStats }) {
           display: flex;
           background: rgba(255, 255, 255, 0.05);
           padding: 2px;
-          border-radius: 20px;
+          border-radius: 0;
         }
         .toggle-item {
           padding: 4px 12px;
@@ -155,7 +155,7 @@ export default function Statistics({ localStats }) {
           font-size: 0.65rem;
           font-weight: 800;
           cursor: pointer;
-          border-radius: 15px;
+          border-radius: 0;
           transition: all 0.2s;
         }
         .toggle-item.active {
@@ -179,7 +179,7 @@ export default function Statistics({ localStats }) {
         .stat-icon {
           width: 36px;
           height: 36px;
-          border-radius: 10px;
+          border-radius: 0;
           display: flex;
           align-items: center;
           justify-content: center;

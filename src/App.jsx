@@ -21,6 +21,7 @@ function App() {
   const [visibleParcelIds, setVisibleParcelIds] = useState(new Set());
   const [expandedParcelIds, setExpandedParcelIds] = useState(new Set());
   const [huso, setHuso] = useState('');
+  const [areaUnit, setAreaUnit] = useState('m2');
   const [detectIslands, setDetectIslands] = useState(false);
   const [isBuildingModalOpen, setIsBuildingModalOpen] = useState(false);
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
@@ -569,6 +570,8 @@ function App() {
           onGeometryEdited={handleGeometryEdited}
           huso={huso}
           flyToTarget={flyToTarget}
+          areaUnit={areaUnit}
+          setAreaUnit={setAreaUnit}
         />
       </div>
       <Sidebar 
@@ -584,6 +587,8 @@ function App() {
         isProcessingCadastre={isProcessingCadastre}
         huso={huso}
         setHuso={setHuso}
+        areaUnit={areaUnit}
+        setAreaUnit={setAreaUnit}
         detectIslands={detectIslands}
         setDetectIslands={setDetectIslands}
         adjustmentSession={adjustmentSession}
