@@ -17,13 +17,14 @@ export default function LegalModal({ isOpen, onClose, type }) {
         '5. Responsabilidad del usuario: El Usuario asume la responsabilidad exclusiva del uso que realice de la Herramienta, incluyendo la exactitud de los datos y la adecuación del fichero a la realidad física y jurídica del inmueble.',
         '6. Exclusión de garantías: La Herramienta se proporciona “tal cual”, sin garantías de ningún tipo sobre la exactitud, fiabilidad o integridad de los resultados.',
         '7. Limitación de responsabilidad: Los desarrolladores no serán responsables de daños directos o indirectos, pérdidas económicas o rechazos en procedimientos administrativos derivados del uso de la Herramienta.',
-        '8. Validación de resultados: Los ficheros generados deben ser validados previamente a su uso en procedimientos oficiales, recomendándose encarecidamente la validación en la Sede Electrónica del Catastro.',
-        '9. Propiedad intelectual: Todos los derechos sobre la Herramienta corresponden a sus desarrolladores. Queda prohibida su reproducción o modificación sin autorización.',
-        '10. Disponibilidad del servicio: No se garantiza la disponibilidad continua. Podrán realizarse modificaciones o suspensiones del servicio sin previo aviso.',
-        '11. Protección de datos: El Usuario es responsable de cumplir con la normativa de protección de datos al introducir información en la Herramienta.',
-        '12. Modificaciones: Los desarrolladores se reservan el derecho a modificar estas condiciones en cualquier momento.',
-        '13. Legislación y jurisdicción: Las presentes condiciones se rigen por la legislación española, sometiéndose a los Juzgados y Tribunales correspondientes.',
-        '14. Aceptación: El uso de la Herramienta implica la aceptación íntegra de estas condiciones.'
+        '8. Validación de resultados: Los ficheros generados deben ser validados previamente a su uso en procedimientos oficiales. Es obligatorio realizar la validación final en la Sede Electrónica del Catastro, especialmente para los Informes de Ubicación de Construcciones (ICUC).',
+        '9. Herramientas de Pre-validación: Las herramientas de pre-validación (IVGA e ICUC) incluidas son de carácter técnico y meramente orientativo, careciendo de valor jurídico vinculante.',
+        '10. Propiedad intelectual: Todos los derechos sobre la Herramienta corresponden a sus desarrolladores. Queda prohibida su reproducción o modificación sin autorización.',
+        '11. Disponibilidad del servicio: No se garantiza la disponibilidad continua. Podrán realizarse modificaciones o suspensiones del servicio sin previo aviso.',
+        '12. Protección de datos: El Usuario es responsable de cumplir con la normativa de protección de datos al introducir información en la Herramienta.',
+        '13. Modificaciones: Los desarrolladores se reservan el derecho a modificar estas condiciones en cualquier momento.',
+        '14. Legislación y jurisdicción: Las presentes condiciones se rigen por la legislación española, sometiéndose a los Juzgados y Tribunales correspondientes.',
+        '15. Aceptación: El uso de la Herramienta implica la aceptación íntegra de estas condiciones.'
       ]
     },
     privacy: {
@@ -41,7 +42,7 @@ export default function LegalModal({ isOpen, onClose, type }) {
         '8. Responsabilidad del usuario: El Usuario se compromete a no introducir datos de terceros sin base legal y a utilizar la Herramienta conforme a la normativa vigente.',
         '9. Seguridad: El procesamiento es local, por lo que la seguridad depende del entorno del Usuario, aunque la Herramienta sigue buenas prácticas de desarrollo.',
         '10. Derechos del usuario: Al no recabarse datos identificables, el ejercicio de derechos del RGPD no resulta de aplicación en principio.',
-        '11. Servicios de terceros: El uso de Supabase se limita a funciones técnicas y estadísticas bajo garantías adecuadas de protección de datos.',
+        '11. Servicios de terceros: El uso de Supabase se limita a funciones técnicas y estadísticas. El localizador de direcciones utiliza la API de Nominatim (OpenStreetMap), que procesa las consultas de búsqueda sin almacenar datos personales vinculados al Usuario en nuestros sistemas.',
         '12. Modificaciones: Los desarrolladores se reservan el derecho a modificar esta política para adaptarla a cambios normativos o mejoras.',
         '13. Aceptación: El uso de la Herramienta implica la aceptación íntegra de esta Política de Privacidad.'
       ]
@@ -59,7 +60,8 @@ export default function LegalModal({ isOpen, onClose, type }) {
         '7. Desactivación o eliminación: En cualquier momento podrá ejercer su derecho de desactivación o eliminación de cookies de este sitio web. Estas acciones se realizan de forma diferente en función del navegador que esté usando (Chrome, Firefox, Safari, Edge, etc.).',
         '8. Consecuencias de la desactivación: Si desactiva las cookies técnicas, es posible que algunas funcionalidades de la web (como el banner de consentimiento) no se comporten correctamente.',
         '9. Garantías adicionales: Ni esta web ni sus representantes legales se hacen responsables ni del contenido ni de la veracidad de las políticas de privacidad que puedan tener los terceros mencionados en esta política de cookies.',
-        '10. Aceptación de la política: El uso de "Generador GML" implica que usted acepta el uso de cookies en los términos aquí expresados.'
+        '10. Servicios Externos: El buscador de calles utiliza el servicio Nominatim de OpenStreetMap. Este servicio puede recoger datos técnicos (IP, navegador) de forma anónima para el procesamiento de la búsqueda.',
+        '11. Aceptación de la política: El uso de "Generador GML" implica que usted acepta el uso de cookies y el procesamiento técnico de datos en los términos aquí expresados.'
       ]
     }
   };

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, FileJson, AlertCircle, AlertTriangle, Download, Trash2, Map, Eye, EyeOff, List, Building, Search, Loader2, LifeBuoy, ShieldCheck, ShieldAlert, Shield, Info } from 'lucide-react';
+import { UploadCloud, FileJson, AlertCircle, AlertTriangle, Download, Trash2, Map, Eye, EyeOff, List, Building, Search, Loader2, LifeBuoy, ShieldCheck, ShieldAlert, Shield, Info, MapPin } from 'lucide-react';
 import JSZip from 'jszip';
 import { parseGML } from '../utils/gmlParser';
 import { parseDXF } from '../utils/dxfParser';
@@ -9,7 +9,10 @@ import { validateTopology, calculatePerimeter, calculateBbox, preValidateMacro }
 import { fetchParcelsByBbox } from '../utils/cadastreService';
 import Statistics from './Statistics';
 import { generateGeoJSON, generateKML } from '../utils/exportUtils';
+import { preValidateICUC } from '../utils/icucValidator';
 
+import quotesData from '../assets/quotes.json';
+import AddressSearch from './AddressSearch';
 
 export default function Sidebar({
   parcels,
@@ -49,24 +52,14 @@ export default function Sidebar({
   const [randomQuote, setRandomQuote] = useState('');
   const [isPreValidating, setIsPreValidating] = useState(false);
   const [macroValidationResult, setMacroValidationResult] = useState(null);
-
-  const quotes = [
-    "Lo que no se define no se puede medir. Lo que no se mide, no se puede mejorar. — Lord Kelvin",
-    "La perfección no se alcanza cuando no hay nada más que añadir, sino cuando no hay nada más que quitar. — A. de Saint-Exupéry",
-    "El mapa no es el territorio. — Alfred Korzybski",
-    "Dios está en los detalles. — Ludwig Mies van der Rohe",
-    "En teoría, no hay diferencia entre teoría y práctica. En la práctica, sí la hay. — Yogi Berra",
-    "La simplicidad es la máxima sofisticación. — Leonardo da Vinci",
-    "La tecnología es mejor cuando une a las personas. — Matt Mullenweg",
-    "La ingeniería es el arte de concebir lo imposible. — Anónimo",
-    "Desarrollada por profesionales, para quienes exigen resultados profesionales."
-  ];
+  const [isIcncValidating, setIsIcncValidating] = useState(false);
+  const [icucValidationResult, setIcncValidationResult] = useState(null);
 
   useEffect(() => {
-    const pick = quotes[Math.floor(Math.random() * quotes.length)];
+    const pick = quotesData[Math.floor(Math.random() * quotesData.length)];
     setRandomQuote(pick);
   }, []);
-  
+
   // Refs for auto-scrolling to alerts/errors
   const errorRef = useRef(null);
   const adjustmentRef = useRef(null);
@@ -162,6 +155,47 @@ export default function Sidebar({
       setErrorMsg("Error en la Pre-Validación: " + (err.message || 'Error desconocido.'));
     } finally {
       setIsPreValidating(false);
+    }
+  };
+
+  const handlePreValidateICUC = async () => {
+    if (!huso) {
+      setErrorMsg('Por favor, selecciona un HUSO UTM antes de realizar la pre-validación.');
+      if (husoAlertRef.current) husoAlertRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    if (parcels.length === 0) {
+      setErrorMsg('No hay elementos cargados para validar.');
+      return;
+    }
+
+    setIsIcncValidating(true);
+    setErrorMsg('');
+    setIcncValidationResult(null);
+
+    try {
+      const allRings = parcels.flatMap(p => p.originalCoords || []);
+      if (allRings.length === 0) throw new Error("Los elementos no tienen coordenadas válidas.");
+
+      const bbox = calculateBbox(allRings);
+      const officialParcelsData = await fetchParcelsByBbox(bbox, huso);
+
+      if (!officialParcelsData || officialParcelsData.length === 0) {
+        throw new Error("El servicio del Catastro no devolvió parcelas en esta zona. Comprueba el HUSO.");
+      }
+
+      const result = preValidateICUC(parcels, officialParcelsData);
+      setIcncValidationResult(result);
+
+      if (ivgaRef.current) {
+        ivgaRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    } catch (err) {
+      console.error("Error en validación ICUC:", err);
+      setErrorMsg("Error en la Pre-Validación ICUC: " + (err.message || 'Error desconocido.'));
+    } finally {
+      setIsIcncValidating(false);
     }
   };
 
@@ -421,7 +455,7 @@ export default function Sidebar({
       content = generateGeoJSON([p]);
       mimeType = 'application/json;charset=utf-8;';
       extension = 'geojson';
-      
+
       const blob = new Blob([content], { type: mimeType });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -435,7 +469,7 @@ export default function Sidebar({
       const zip = new JSZip();
       zip.file("doc.kml", content);
       const zipBlob = await zip.generateAsync({ type: 'blob' });
-      
+
       const url = URL.createObjectURL(zipBlob);
       const a = document.createElement('a');
       a.href = url;
@@ -443,7 +477,7 @@ export default function Sidebar({
       a.click();
       URL.revokeObjectURL(url);
     }
-    
+
     onIncrementStat('downloads');
   };
 
@@ -543,7 +577,28 @@ export default function Sidebar({
           letterSpacing: '0.05em',
           textTransform: 'uppercase'
         }}>
-          <Search size={14} /> Búsqueda Catastral
+          <MapPin size={14} /> LOCALIZADOR DE DIRECCIONES
+        </label>
+        
+        <AddressSearch onSelectLocation={(coords, name) => {
+          onFlyToLocation({ lat: coords[0], lng: coords[1], label: name });
+          onIncrementStat('searches');
+        }} />
+
+        <div style={{ height: '1px', background: 'rgba(255,255,255,0.05)', margin: '15px 0' }}></div>
+
+        <label style={{
+          fontSize: '0.8rem',
+          fontWeight: 'bold',
+          color: 'var(--accent-primary)',
+          marginBottom: '12px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          letterSpacing: '0.05em',
+          textTransform: 'uppercase'
+        }}>
+          <Search size={14} /> Búsqueda por Ref. Catastral
         </label>
 
         <form onSubmit={handleSearchCatastro} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -623,8 +678,8 @@ export default function Sidebar({
       </div>
 
       <div className="form-group glass-card" style={{ marginBottom: '20px', padding: '16px', border: '1px solid rgba(255,255,255,0.05)' }}>
-        <label htmlFor="huso" style={{ 
-          fontSize: '0.8rem', fontWeight: 'bold', color: 'var(--accent-primary)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' 
+        <label htmlFor="huso" style={{
+          fontSize: '0.8rem', fontWeight: 'bold', color: 'var(--accent-primary)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px'
         }}>SISTEMA DE REFERENCIA (EPSG)</label>
 
         {parcels.some(p => p.filename && p.filename.toLowerCase().endsWith('.dxf')) && !huso && (
@@ -794,25 +849,47 @@ export default function Sidebar({
               })()}
 
               <div ref={ivgaRef} style={{ marginBottom: '16px' }}>
-                 <button 
-                   onClick={handlePreValidateGlobal} 
-                   className="btn btn-primary pulse-indicator" 
-                   style={{ width: '100%', padding: '10px 15px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '0.8rem', background: 'linear-gradient(45deg, #10b981, #059669)', border: 'none', boxShadow: '0 4px 15px rgba(16, 185, 129, 0.2)' }}
-                   disabled={isPreValidating}
-                 >
-                   {isPreValidating ? <Loader2 className="animate-spin" size={18} /> : <ShieldCheck size={18} />} 
-                   {isPreValidating ? 'CALCULANDO...' : 'PRE-VALIDACIÓN CATASTRAL (IVGA)'}
-                 </button>
+                <button
+                  onClick={handlePreValidateGlobal}
+                  className="btn btn-primary pulse-indicator"
+                  style={{ width: '100%', padding: '10px 15px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '0.8rem', background: 'linear-gradient(45deg, #10b981, #059669)', border: 'none', boxShadow: '0 4px 15px rgba(16, 185, 129, 0.2)' }}
+                  disabled={isPreValidating}
+                >
+                  {isPreValidating ? <Loader2 className="animate-spin" size={18} /> : <ShieldCheck size={18} />}
+                  {isPreValidating ? 'CALCULANDO...' : 'PRE-VALIDACIÓN CATASTRAL (IVGA)'}
+                </button>
+
+                <button
+                  onClick={handlePreValidateICUC}
+                  className="btn btn-secondary"
+                  style={{
+                    width: '100%',
+                    marginTop: '10px',
+                    padding: '10px 15px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    fontSize: '0.8rem',
+                    background: 'rgba(56, 189, 248, 0.1)',
+                    border: '1px solid rgba(56, 189, 248, 0.3)',
+                    color: '#38bdf8'
+                  }}
+                  disabled={isIcncValidating}
+                >
+                  {isIcncValidating ? <Loader2 className="animate-spin" size={18} /> : <Building size={18} />}
+                  {isIcncValidating ? 'VALIDANDO...' : 'PRE-VALIDACIÓN ICUC (CONSTRUCCIONES)'}
+                </button>
               </div>
 
               {macroValidationResult && (() => {
-                 const isWarning = macroValidationResult.isValid && macroValidationResult.message.includes('Advertencia');
-                 const color = macroValidationResult.isValid ? (isWarning ? '#f59e0b' : '#10b981') : '#ef4444';
-                 const bgColor = macroValidationResult.isValid ? (isWarning ? 'rgba(245, 158, 11, 0.05)' : 'rgba(16, 185, 129, 0.05)') : 'rgba(239, 68, 68, 0.05)';
-                 const Icon = macroValidationResult.isValid ? (isWarning ? AlertTriangle : ShieldCheck) : ShieldAlert;
+                const isWarning = macroValidationResult.isValid && macroValidationResult.message.includes('Advertencia');
+                const color = macroValidationResult.isValid ? (isWarning ? '#f59e0b' : '#10b981') : '#ef4444';
+                const bgColor = macroValidationResult.isValid ? (isWarning ? 'rgba(245, 158, 11, 0.05)' : 'rgba(16, 185, 129, 0.05)') : 'rgba(239, 68, 68, 0.05)';
+                const Icon = macroValidationResult.isValid ? (isWarning ? AlertTriangle : ShieldCheck) : ShieldAlert;
 
-                 return (
-                  <div className="glass-card" style={{ padding: '15px', marginBottom: '16px', background: bgColor, borderLeft: `3px solid ${color}`}}>
+                return (
+                  <div className="glass-card" style={{ padding: '15px', marginBottom: '16px', background: bgColor, borderLeft: `3px solid ${color}` }}>
                     <h3 style={{ fontSize: '0.85rem', color: color, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
                       <Icon size={18} />
                       RESULTADO: {macroValidationResult.isValid ? 'POSITIVO' : 'NEGATIVO'}
@@ -820,33 +897,79 @@ export default function Sidebar({
                     <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '10px', lineHeight: '1.4' }}>
                       {macroValidationResult.message}
                     </p>
-                    
+
                     {macroValidationResult.userArea !== undefined && (
                       <div style={{ fontSize: '0.7rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '10px', paddingBottom: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                        <div><strong style={{color:'var(--text-primary)'}}>Topografía:</strong> {(macroValidationResult.userArea).toFixed(2)} m²</div>
-                        <div><strong style={{color:'var(--text-primary)'}}>Catastro act.:</strong> {(macroValidationResult.officialArea).toFixed(2)} m²</div>
+                        <div><strong style={{ color: 'var(--text-primary)' }}>Topografía:</strong> {(macroValidationResult.userArea).toFixed(2)} m²</div>
+                        <div><strong style={{ color: 'var(--text-primary)' }}>Catastro act.:</strong> {(macroValidationResult.officialArea).toFixed(2)} m²</div>
                       </div>
                     )}
 
-                    <div style={{ 
-                      display: 'flex', 
-                      gap: '8px', 
-                      padding: '8px', 
-                      background: 'rgba(56, 189, 248, 0.03)', 
+                    <div style={{
+                      display: 'flex',
+                      gap: '8px',
+                      padding: '8px',
+                      background: 'rgba(56, 189, 248, 0.03)',
                       borderRadius: '4px',
                       border: '1px solid rgba(56, 189, 248, 0.1)'
                     }}>
                       <Info size={14} style={{ color: '#38bdf8', flexShrink: 0, marginTop: '1px' }} />
                       <p style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.5)', lineHeight: '1.3', margin: 0 }}>
-                        <strong style={{ color: '#38bdf8' }}>NOTA:</strong> Este resultado es puramente informativo y basado en cálculos locales. 
-                        <strong> Es obligatorio</strong> realizar la validación final en la 
-                        <a href="https://www2.catastro.meh.es/Sede/Pags/IEDG/ValidaGML.aspx" target="_blank" rel="noopener noreferrer" style={{ color: '#38bdf8', textDecoration: 'underline', marginLeft: '3px' }}>
+                        <strong style={{ color: '#38bdf8' }}>NOTA:</strong> Este resultado es puramente informativo y basado en cálculos locales.
+                        <strong> Es obligatorio</strong> realizar la validación final en la
+                        <a href="https://www.sedecatastro.gob.es/" target="_blank" rel="noopener noreferrer" style={{ color: '#38bdf8', textDecoration: 'underline', marginLeft: '3px' }}>
                           Sede Electrónica del Catastro
-                        </a>.
+                        </a>
                       </p>
                     </div>
                   </div>
-                 );
+                );
+              })()}
+              {icucValidationResult && (() => {
+                const color = icucValidationResult.isValid ? '#10b981' : '#ef4444';
+                const bgColor = icucValidationResult.isValid ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)';
+                const Icon = icucValidationResult.isValid ? ShieldCheck : ShieldAlert;
+
+                return (
+                  <div className="glass-card" style={{ padding: '15px', marginBottom: '16px', background: bgColor, borderLeft: `3px solid ${color}` }}>
+                    <h3 style={{ fontSize: '0.85rem', color: color, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                      <Icon size={18} />
+                      RESULTADO ICUC: {icucValidationResult.isValid ? 'POSITIVO' : 'NEGATIVO'}
+                    </h3>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '10px', lineHeight: '1.4' }}>
+                      {icucValidationResult.message}
+                    </p>
+
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-primary)', marginBottom: '10px', padding: '8px', background: 'rgba(0,0,0,0.2)', borderRadius: '4px' }}>
+                      <div><strong>Parcela Objetivo:</strong> {icucValidationResult.targetParcel}</div>
+                      <div><strong>Área Ocupada:</strong> {icucValidationResult.totalBuildingArea.toFixed(2)} m²</div>
+                      {icucValidationResult.invasionArea > 0 && (
+                        <div style={{ color: '#ef4444', marginTop: '4px' }}><strong>Invasión Colindantes:</strong> {icucValidationResult.invasionArea.toFixed(2)} m²</div>
+                      )}
+                      {icucValidationResult.outsideArea > 0 && (
+                        <div style={{ color: '#ef4444' }}><strong>Invasión Vía Pública:</strong> {icucValidationResult.outsideArea.toFixed(2)} m²</div>
+                      )}
+                    </div>
+
+                    <div style={{
+                      display: 'flex',
+                      gap: '8px',
+                      padding: '8px',
+                      background: 'rgba(56, 189, 248, 0.03)',
+                      borderRadius: '4px',
+                      border: '1px solid rgba(56, 189, 248, 0.1)'
+                    }}>
+                      <Info size={14} style={{ color: '#38bdf8', flexShrink: 0, marginTop: '1px' }} />
+                      <p style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.5)', lineHeight: '1.3', margin: 0 }}>
+                        <strong style={{ color: '#38bdf8' }}>NOTA:</strong> Este resultado es puramente informativo y basado en cálculos locales.
+                        <strong> Es obligatorio</strong> realizar la validación final en la
+                        <a href="https://www.sedecatastro.gob.es/" target="_blank" rel="noopener noreferrer" style={{ color: '#38bdf8', textDecoration: 'underline', marginLeft: '3px' }}>
+                          Sede Electrónica del Catastro
+                        </a> (este último tienes que mandar al enlace siguiente).
+                      </p>
+                    </div>
+                  </div>
+                );
               })()}
 
               <div className="parcel-list">
@@ -1093,32 +1216,32 @@ export default function Sidebar({
         alignItems: 'center'
       }}>
         <div style={{ display: 'flex', gap: '15px', fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
-          <span 
-            onClick={() => onOpenLegalModal('legal')} 
+          <span
+            onClick={() => onOpenLegalModal('legal')}
             style={{ cursor: 'pointer', transition: 'color 0.2s' }}
             onMouseOver={(e) => e.target.style.color = 'var(--accent-primary)'}
             onMouseOut={(e) => e.target.style.color = 'var(--text-secondary)'}
           >
             Aviso Legal
           </span>
-          <span 
-            onClick={() => onOpenLegalModal('privacy')} 
+          <span
+            onClick={() => onOpenLegalModal('privacy')}
             style={{ cursor: 'pointer', transition: 'color 0.2s' }}
             onMouseOver={(e) => e.target.style.color = 'var(--accent-primary)'}
             onMouseOut={(e) => e.target.style.color = 'var(--text-secondary)'}
           >
             Privacidad
           </span>
-          <span 
-            onClick={() => onOpenLegalModal('cookies')} 
+          <span
+            onClick={() => onOpenLegalModal('cookies')}
             style={{ cursor: 'pointer', transition: 'color 0.2s' }}
             onMouseOver={(e) => e.target.style.color = 'var(--accent-primary)'}
             onMouseOut={(e) => e.target.style.color = 'var(--text-secondary)'}
           >
             Cookies
           </span>
-          <span 
-            onClick={onOpenSupportModal} 
+          <span
+            onClick={onOpenSupportModal}
             style={{ cursor: 'pointer', transition: 'color 0.2s' }}
             onMouseOver={(e) => e.target.style.color = 'var(--accent-primary)'}
             onMouseOut={(e) => e.target.style.color = 'var(--text-secondary)'}
@@ -1126,18 +1249,18 @@ export default function Sidebar({
             Contacto
           </span>
         </div>
-        <div style={{ 
-          fontSize: '0.65rem', 
+        <div style={{
+          fontSize: '0.65rem',
           color: 'var(--text-secondary)',
           opacity: 0.7,
-          textAlign: 'center', 
+          textAlign: 'center',
           marginTop: '15px',
           lineHeight: '1.5',
           letterSpacing: '0.02em',
           borderTop: '1px solid rgba(255,255,255,0.03)',
           paddingTop: '15px'
         }}>
-          <i>{randomQuote}</i><br/>
+          <i>{randomQuote}</i><br />
           <span style={{ color: 'var(--accent-primary)', fontWeight: 800, marginTop: '5px', display: 'inline-block' }}>
             — KIRAKIRA 2026
           </span>
