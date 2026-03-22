@@ -1,6 +1,6 @@
 # generador-gml
 visor de gml. conversion de fichero gml v3 a gml v4. genrador ficheros gml edificio.
-
+pre-validacion catastral y pre-validacion ICUC. 
 ## Desarrollo
 Este proyecto utiliza React + Vite.
 
