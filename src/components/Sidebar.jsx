@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, FileJson, AlertCircle, AlertTriangle, Download, Trash2, Map, Eye, EyeOff, List, Building, Search, Loader2, LifeBuoy, ShieldCheck, ShieldAlert, Shield, Info, MapPin } from 'lucide-react';
+import { UploadCloud, FileJson, AlertCircle, AlertTriangle, Download, Trash2, Map, Eye, EyeOff, List, Building, Search, Loader2, LifeBuoy, ShieldCheck, ShieldAlert, Shield, Info, MapPin, Calendar, History, ChevronDown, Compass } from 'lucide-react';
 import JSZip from 'jszip';
 import { parseGML } from '../utils/gmlParser';
 import { parseDXF } from '../utils/dxfParser';
 import { generateGMLv4 } from '../utils/gmlGenerator';
 import { generateDXF } from '../utils/dxfGenerator';
-import { validateTopology, calculatePerimeter, calculateBbox, preValidateMacro } from '../utils/geoUtils';
+import { validateTopology, calculatePerimeter, calculateBbox, preValidateMacro, calculatePolygonArea } from '../utils/geoUtils';
 import { fetchParcelsByBbox } from '../utils/cadastreService';
 import Statistics from './Statistics';
 import { generateGeoJSON, generateKML } from '../utils/exportUtils';
@@ -42,7 +42,15 @@ export default function Sidebar({
   stats,
   onIncrementStat,
   onOpenSupportModal,
-  onOpenLegalModal
+  onOpenLegalModal,
+  selectedParcelId,
+  onSelectParcel,
+  isHistoricalLayerActive,
+  setIsHistoricalLayerActive,
+  historicalDate,
+  setHistoricalDate,
+  onHusoRequired,
+  husoAlertCounter
 }) {
 
   const [dragActive, setDragActive] = useState(false);
@@ -52,8 +60,11 @@ export default function Sidebar({
   const [randomQuote, setRandomQuote] = useState('');
   const [isPreValidating, setIsPreValidating] = useState(false);
   const [macroValidationResult, setMacroValidationResult] = useState(null);
+  const [expandedHist, setExpandedHist] = useState(false); // Local state for unfolding reliability
   const [isIcncValidating, setIsIcncValidating] = useState(false);
   const [icucValidationResult, setIcncValidationResult] = useState(null);
+  const [showHusoAlert, setShowHusoAlert] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState(null);
 
   useEffect(() => {
     const pick = quotesData[Math.floor(Math.random() * quotesData.length)];
@@ -63,8 +74,8 @@ export default function Sidebar({
   // Refs for auto-scrolling to alerts/errors
   const errorRef = useRef(null);
   const adjustmentRef = useRef(null);
-  const husoAlertRef = useRef(null);
   const ivgaRef = useRef(null);
+  const husoAlertRef = useRef(null);
 
   // Auto-scroll logic
   useEffect(() => {
@@ -79,18 +90,34 @@ export default function Sidebar({
     }
   }, [adjustmentSession]);
 
-  useEffect(() => {
-    const hasDxfWithoutHuso = parcels.some(p => p.filename && p.filename.toLowerCase().endsWith('.dxf')) && !huso;
-    if (hasDxfWithoutHuso && husoAlertRef.current) {
-      husoAlertRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-  }, [parcels, huso]);
 
   useEffect(() => {
     if (ivgaReport && ivgaRef.current) {
       ivgaRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [ivgaReport]);
+
+  useEffect(() => {
+    if (showHusoAlert && husoAlertRef.current) {
+      husoAlertRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [showHusoAlert]);
+
+  // When the parent signals that a HUSO-requiring tool was activated, show the alert
+  useEffect(() => {
+    if (husoAlertCounter && husoAlertCounter > 0) {
+      setShowHusoAlert(true);
+    }
+  }, [husoAlertCounter]);
+
+
+  // Auto-scroll sidebar to the selected parcel card (e.g. selected from map click)
+  const parcelCardRefs = useRef({});
+  useEffect(() => {
+    if (selectedParcelId && parcelCardRefs.current[selectedParcelId]) {
+      parcelCardRefs.current[selectedParcelId].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [selectedParcelId]);
 
   const handleDrag = (e) => {
     e.preventDefault();
@@ -116,7 +143,6 @@ export default function Sidebar({
   const handlePreValidateGlobal = async () => {
     if (!huso) {
       setErrorMsg('Por favor, selecciona un HUSO UTM antes de realizar la pre-validación.');
-      if (husoAlertRef.current) husoAlertRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
 
@@ -161,7 +187,6 @@ export default function Sidebar({
   const handlePreValidateICUC = async () => {
     if (!huso) {
       setErrorMsg('Por favor, selecciona un HUSO UTM antes de realizar la pre-validación.');
-      if (husoAlertRef.current) husoAlertRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
 
@@ -207,7 +232,8 @@ export default function Sidebar({
     }
   };
 
-  const processFiles = async (files) => {
+  const processFiles = async (files, husoOverride = null) => {
+    const currentHuso = husoOverride || huso;
     const validExtensions = ['.gml', '.dxf'];
     const invalidFiles = Array.from(files).filter(file => {
       const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
@@ -227,7 +253,13 @@ export default function Sidebar({
           const p = await parseGML(file);
           newParcels = newParcels.concat(p);
         } else if (ext === '.dxf') {
-          const p = await parseDXF(file, huso);
+          if (!currentHuso) {
+            setPendingFiles(Array.from(files)); // Guarda los ficheros para re-intentar tras elegir Huso
+            setShowHusoAlert(true);
+            // setErrorMsg Removed to avoid duplicate alerts as requested
+            return;
+          }
+          const p = await parseDXF(file, currentHuso);
           newParcels = newParcels.concat(p);
         }
       }
@@ -536,19 +568,22 @@ export default function Sidebar({
       </header>
 
       {/* 1. DropZone (Sube tus ficheros) */}
-      <div
-        className={`dropzone ${dragActive ? 'active' : ''} ${errorMsg ? 'error' : ''}`}
-        onDragEnter={handleDrag}
-        onDragLeave={handleDrag}
-        onDragOver={handleDrag}
-        onDrop={handleDrop}
-        onClick={() => document.getElementById('file-upload').click()}
-        style={{ marginBottom: '20px', borderRadius: '0' }}
-      >
-        <UploadCloud className="drop-icon" />
-        <div>
-          <h3 style={{ color: 'var(--text-primary)', marginBottom: 4 }}>Sube tus ficheros</h3>
-          <p>Arrastra ficheros .gml o .dxf, o haz clic aquí</p>
+      <div className="form-group glass-card" style={{ marginBottom: '12px', padding: '14px', border: '1px solid rgba(255,255,255,0.05)' }}>
+        <label style={{ fontSize: '0.7rem', fontWeight: '700', color: 'var(--accent-primary)', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+          <UploadCloud size={13} /> Sube tus ficheros
+        </label>
+        <div
+          className={`dropzone ${dragActive ? 'active' : ''} ${errorMsg ? 'error' : ''}`}
+          onDragEnter={handleDrag}
+          onDragLeave={handleDrag}
+          onDragOver={handleDrag}
+          onDrop={handleDrop}
+          onClick={() => document.getElementById('file-upload').click()}
+          style={{ borderRadius: '0', background: 'rgba(0,0,0,0.2)', padding: '20px' }}
+        >
+          <div style={{ textAlign: 'center' }}>
+            <p style={{ margin: 0, fontSize: '0.8rem' }}>Arrastra ficheros .gml o .dxf, o haz clic aquí</p>
+          </div>
         </div>
         <input
           id="file-upload"
@@ -560,136 +595,209 @@ export default function Sidebar({
         />
       </div>
 
-      {/* 2. Búsqueda Catastral */}
-      <div className="form-group glass-card" style={{
-        marginBottom: '20px',
-        padding: '16px',
-        border: '1px solid rgba(255,255,255,0.05)'
-      }}>
-        <label style={{
-          fontSize: '0.8rem',
-          fontWeight: 'bold',
-          color: 'var(--accent-primary)',
-          marginBottom: '12px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          letterSpacing: '0.05em',
-          textTransform: 'uppercase'
-        }}>
-          <MapPin size={14} /> LOCALIZADOR DE DIRECCIONES
+      {/* 2. Localizador de Direcciones */}
+      <div className="form-group glass-card" style={{ marginBottom: '12px', padding: '14px', border: '1px solid rgba(255,255,255,0.05)' }}>
+        <label style={{ fontSize: '0.7rem', fontWeight: '700', color: 'var(--accent-primary)', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+          <MapPin size={13} /> Localizador de Direcciones
         </label>
-        
         <AddressSearch onSelectLocation={(coords, name) => {
           onFlyToLocation({ lat: coords[0], lng: coords[1], label: name });
           onIncrementStat('searches');
         }} />
+      </div>
 
-        <div style={{ height: '1px', background: 'rgba(255,255,255,0.05)', margin: '15px 0' }}></div>
-
-        <label style={{
-          fontSize: '0.8rem',
-          fontWeight: 'bold',
-          color: 'var(--accent-primary)',
-          marginBottom: '12px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          letterSpacing: '0.05em',
-          textTransform: 'uppercase'
-        }}>
-          <Search size={14} /> Búsqueda por Ref. Catastral
+      {/* 3. Búsqueda por Ref. Catastral */}
+      <div className="form-group glass-card" style={{ marginBottom: '12px', padding: '14px', border: '1px solid rgba(255,255,255,0.05)' }}>
+        <label style={{ fontSize: '0.7rem', fontWeight: '700', color: 'var(--accent-primary)', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+          <Search size={13} /> Búsqueda por Ref. Catastral
         </label>
-
-        <form onSubmit={handleSearchCatastro} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div style={{ position: 'relative' }}>
-            <input
-              type="text"
-              placeholder="Ej: 30030A070000380000WU"
-              value={searchRefCat}
-              onChange={(e) => setSearchRefCat(e.target.value.toUpperCase())}
-              maxLength={20}
-              autoComplete="off"
-              style={{
-                width: '100%',
-                padding: '12px 14px',
-                background: 'rgba(0,0,0,0.4)',
-                border: '2px solid rgba(255,255,255,0.1)',
-                borderRadius: '0',
-                color: 'var(--accent-primary)',
-                fontSize: '1rem',
-                fontFamily: 'monospace',
-                outline: 'none',
-                transition: 'all 0.2s ease'
-              }}
-              onFocus={(e) => {
-                e.target.style.borderColor = 'var(--accent-primary)';
-                e.target.style.background = 'rgba(0,0,0,0.6)';
-              }}
-              onBlur={(e) => {
-                e.target.style.borderColor = 'rgba(255,255,255,0.1)';
-                e.target.style.background = 'rgba(0,0,0,0.4)';
-              }}
-            />
-          </div>
-
+        <form onSubmit={handleSearchCatastro} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <input
+            type="text"
+            placeholder="Ej: 30030A070000380000WU"
+            value={searchRefCat}
+            onChange={(e) => setSearchRefCat(e.target.value.toUpperCase())}
+            maxLength={20}
+            autoComplete="off"
+            style={{
+              width: '100%', padding: '10px 12px',
+              background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: '0', color: 'var(--accent-primary)',
+              fontSize: '0.8rem', fontFamily: 'monospace', outline: 'none',
+              transition: 'all 0.2s ease'
+            }}
+            onFocus={(e) => { e.target.style.borderColor = 'var(--accent-primary)'; e.target.style.background = 'rgba(0,0,0,0.6)'; }}
+            onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.1)'; e.target.style.background = 'rgba(0,0,0,0.4)'; }}
+          />
           <button
             type="submit"
             className="btn btn-primary"
             disabled={isSearching}
-            style={{
-              width: '100%',
-              padding: '12px',
-              borderRadius: '0',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '10px',
-              fontSize: '0.9rem',
-              fontWeight: 'bold',
-              height: '48px'
-            }}
+            style={{ width: '100%', padding: '9px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '0.72rem', fontWeight: '700', height: '38px', letterSpacing: '0.05em' }}
           >
-            {isSearching ? (
-              <Loader2 size={20} className="animate-spin" />
-            ) : (
-              <>
-                <Map size={18} /> LOCALIZAR PARCELA
-              </>
-            )}
+            {isSearching ? <Loader2 size={16} className="animate-spin" /> : <><Map size={14} /> LOCALIZAR PARCELA</>}
           </button>
         </form>
+      </div>
 
-        {errorMsg && (
-          <div ref={errorRef} style={{
+      {/* 4. Cartografía Histórica */}
+      <div className="form-group glass-card" style={{ marginBottom: '12px', padding: '14px', border: '1px solid rgba(255,255,255,0.05)' }}>
+        <div className="historical-cadastre-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div 
+            className="header-left" 
+            onClick={() => setExpandedHist(!expandedHist)} 
+            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}
+          >
+            <History size={13} style={{ color: 'var(--accent-primary)' }} />
+            <span style={{ fontSize: '0.7rem', fontWeight: '700', color: 'var(--accent-primary)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>CATASTRO HISTÓRICO</span>
+            <ChevronDown className={`chevron-icon ${expandedHist ? 'open' : ''}`} size={14} style={{ transition: 'transform 0.3s', color: 'var(--accent-primary)' }} />
+          </div>
+          <div className="header-right">
+            <div style={{
+              display: 'flex',
+              background: 'rgba(255, 255, 255, 0.05)',
+              padding: '2px',
+              borderRadius: '0'
+            }}>
+              <button 
+                type="button"
+                onClick={() => {
+                  setIsHistoricalLayerActive(false);
+                  setExpandedHist(false);
+                }}
+                style={{
+                  padding: '4px 10px',
+                  border: 'none',
+                  background: !expandedHist ? 'var(--accent-primary)' : 'transparent',
+                  color: !expandedHist ? '#000' : 'var(--text-secondary)',
+                  fontSize: '0.6rem',
+                  fontWeight: '800',
+                  cursor: 'pointer',
+                  borderRadius: '0',
+                  transition: 'all 0.2s'
+                }}
+              >
+                ACTUAL
+              </button>
+              <button 
+                type="button"
+                onClick={() => {
+                  setIsHistoricalLayerActive(true);
+                  setExpandedHist(true);
+                }}
+                style={{
+                  padding: '4px 10px',
+                  border: 'none',
+                  background: expandedHist ? 'var(--accent-primary)' : 'transparent',
+                  color: expandedHist ? '#000' : 'var(--text-secondary)',
+                  fontSize: '0.6rem',
+                  fontWeight: '800',
+                  cursor: 'pointer',
+                  borderRadius: '0',
+                  transition: 'all 0.2s'
+                }}
+              >
+                HISTÓRICO
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {expandedHist && (
+          <div className="animate-unfold" style={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            gap: '8px', 
             marginTop: '12px',
-            color: '#ff4d4d',
-            fontSize: '0.8rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            background: 'rgba(255,77,77,0.1)',
-            padding: '8px',
-            borderRadius: '4px'
+            padding: '12px',
+            background: 'rgba(24, 24, 27, 0.4)',
+            border: '1px solid rgba(255,255,255,0.05)',
+            borderRadius: '0'
           }}>
-            <AlertCircle size={14} /> {errorMsg}
+            <div style={{ position: 'relative' }}>
+              <Calendar size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--accent-primary)', pointerEvents: 'none' }} />
+              <input
+                type="date"
+                value={historicalDate}
+                onChange={(e) => setHistoricalDate(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px 10px 34px',
+                  background: 'rgba(0,0,0,0.4)',
+                  border: '1px solid var(--accent-primary)',
+                  borderRadius: '0',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.9rem',
+                  fontFamily: 'monospace',
+                  outline: 'none',
+                  colorScheme: 'dark'
+                }}
+              />
+            </div>
+            <p style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', fontStyle: 'italic', margin: 0 }}>
+              * Seleccione la fecha deseada para consultar la cartografía.
+            </p>
           </div>
         )}
       </div>
 
-      <div className="form-group glass-card" style={{ marginBottom: '20px', padding: '16px', border: '1px solid rgba(255,255,255,0.05)' }}>
-        <label htmlFor="huso" style={{
-          fontSize: '0.8rem', fontWeight: 'bold', color: 'var(--accent-primary)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px'
-        }}>SISTEMA DE REFERENCIA (EPSG)</label>
+      {/* Error Message Display */}
+      {errorMsg && (
+        <div ref={errorRef} style={{
+          marginBottom: '12px',
+          color: '#ff4d4d',
+          fontSize: '0.8rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          background: 'rgba(255,77,77,0.1)',
+          padding: '8px',
+          borderRadius: '4px'
+        }}>
+          <AlertCircle size={14} /> {errorMsg}
+        </div>
+      )}
 
-        {parcels.some(p => p.filename && p.filename.toLowerCase().endsWith('.dxf')) && !huso && (
-          <div ref={husoAlertRef} style={{ color: 'var(--accent-warning)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', background: 'rgba(234, 179, 8, 0.1)', borderRadius: 8, marginBottom: '12px', border: '1px solid rgba(234, 179, 8, 0.3)' }}>
-            <AlertCircle size={14} style={{ flexShrink: 0 }} />
-            <span>El plano DXF se ha cargado. Selecciona su HUSO aquí para situarlo en el mapa.</span>
+      {/* 5. Sistema de Referencia */}
+      <div className="form-group glass-card" style={{ marginBottom: '12px', padding: '14px', border: '1px solid rgba(255,255,255,0.05)' }}>
+        <label htmlFor="huso" style={{
+          fontSize: '0.7rem', fontWeight: '700', color: 'var(--accent-primary)', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px', letterSpacing: '0.06em', textTransform: 'uppercase'
+        }}>
+          <Compass size={13} /> SISTEMA DE REFERENCIA (EPSG)
+        </label>
+
+
+        {showHusoAlert && (
+          <div ref={husoAlertRef} className="animate-pulse" style={{
+            background: 'rgba(239, 68, 68, 0.15)',
+            border: '1px solid var(--accent-danger)',
+            padding: '10px',
+            marginBottom: '12px',
+            borderRadius: '4px',
+            color: 'var(--accent-danger)',
+            fontSize: '0.75rem',
+            fontWeight: 700,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8
+          }}>
+            <AlertCircle size={16} /> ⚠️ SELECCIONA EL HUSO CORRESPONDIENTE
           </div>
         )}
 
-        <select id="huso" value={huso} onChange={(e) => { setHuso(e.target.value); setErrorMsg(''); }} style={{
+
+        <select id="huso" value={huso} onChange={(e) => { 
+          const selectedHuso = e.target.value;
+          setHuso(selectedHuso); 
+          setErrorMsg(''); 
+          setShowHusoAlert(false); 
+          
+          // Si había ficheros pendientes de procesar (esperando el Huso), relanzar el proceso
+          if (selectedHuso && pendingFiles) {
+            processFiles(pendingFiles, selectedHuso);
+            setPendingFiles(null);
+          }
+        }} style={{
           width: '100%', padding: '10px', background: 'rgba(0,0,0,0.4)', color: 'var(--text-primary)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '0'
         }}>
           <option value="">-- Selecciona HUSO --</option>
@@ -997,13 +1105,21 @@ export default function Sidebar({
                     });
                   }
 
+                  const area = (p.originalCoords || []).reduce((acc, ring) => acc + calculatePolygonArea(ring), 0);
                   const perimeter = (p.originalCoords || []).reduce((acc, ring) => acc + calculatePerimeter(ring), 0);
 
                   return (
-                    <div key={p.id} className="glass-card" style={{
-                      borderColor: isVisible ? 'var(--border-active)' : 'var(--border-color)',
-                      opacity: isVisible ? 1 : 0.7
-                    }}>
+                    <div
+                      key={p.id}
+                      ref={el => { parcelCardRefs.current[p.id] = el; }}
+                      className={`glass-card ${selectedParcelId === p.id ? 'parcel-list-item-selected' : ''}`}
+                      onClick={() => onSelectParcel(p)}
+                      style={{
+                        borderColor: isVisible ? (selectedParcelId === p.id ? 'var(--accent-primary)' : 'var(--border-active)') : 'var(--border-color)',
+                        opacity: isVisible ? 1 : 0.7,
+                        cursor: 'pointer'
+                      }}
+                    >
                       {/* === Top row: full-width name + metadata === */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
@@ -1068,7 +1184,10 @@ export default function Sidebar({
                       </div>
 
                       {/* === Bottom row: action buttons === */}
-                      <div style={{ display: 'flex', gap: 2, marginTop: '6px', justifyContent: 'flex-end', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '6px' }}>
+                      <div
+                        style={{ display: 'flex', gap: 2, marginTop: '6px', justifyContent: 'flex-end', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '6px' }}
+                        onClick={(e) => e.stopPropagation()} // Prevent selecting when clicking buttons
+                      >
                         <button
                           onClick={() => toggleParcelVisibility(p.id)}
                           className="action-icon-btn"
@@ -1081,8 +1200,8 @@ export default function Sidebar({
                         <button
                           onClick={() => toggleParcelDetails(p.id)}
                           className="action-icon-btn"
-                          style={{ color: isExpanded ? 'var(--accent-primary)' : 'var(--text-secondary)' }}
-                          title="Vértices"
+                          style={{ color: 'var(--accent-primary)' }}
+                          title={isExpanded ? "Ocultar Vértices" : "Mostrar Vértices"}
                         >
                           <List size={15} />
                         </button>
@@ -1109,8 +1228,8 @@ export default function Sidebar({
                       </div>
 
                       {/* Topology Health Check */}
-                      {p.geometry && (() => {
-                        const geoErrors = validateTopology(p.geometry);
+                      {(p.topologyErrors && p.topologyErrors.length > 0) && (() => {
+                        const geoErrors = p.topologyErrors;
                         if (geoErrors.length > 0) {
                           return (
                             <div style={{ marginTop: '8px', padding: '8px', background: 'rgba(239, 68, 68, 0.05)', borderRadius: '4px', borderLeft: '2px solid var(--accent-danger)' }}>

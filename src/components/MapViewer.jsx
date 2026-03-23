@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { History } from 'lucide-react';
 import L from 'leaflet';
 import proj4 from 'proj4';
 import 'leaflet/dist/leaflet.css';
@@ -21,21 +22,44 @@ L.Marker.prototype.options.icon = DefaultIcon;
 const SPAIN_CENTER = [40.463667, -3.74922];
 const DEFAULT_ZOOM = 6;
 
-export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDrawingCreated, adjustmentSession, onGeometryEdited,  huso,
+export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDrawingCreated, adjustmentSession, onGeometryEdited, huso,
   flyToTarget,
+  selectedParcelId,
+  onSelectParcel,
+  isHistoricalLayerActive,
+  historicalDate,
   areaUnit,
-  setAreaUnit
+  setAreaUnit,
+  onHusoRequired
 }) {
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
   const featuresLayer = useRef(null);
   const adjustmentLayers = useRef(new L.LayerGroup());
   const prevAdjustmentSession = useRef(adjustmentSession);
+  const husoRef = useRef(huso);
+  const prevParcelsLength = useRef(parcels.length);
+  const historicalLayerRef = useRef(null);
+  const mainCatastroLayerRef = useRef(null);
+
+  // Keep husoRef in sync with the huso prop
+  useEffect(() => {
+    husoRef.current = huso;
+  }, [huso]);
 
   // New states for measurement tools
-  const [activeTool, setActiveTool] = React.useState(null);
-  const [measurements, setMeasurements] = React.useState({ distance: 0, area: 0, coords: null });
+  const [activeTool, setActiveTool] = useState(null);
+  const [measurements, setMeasurements] = useState({ distance: 0, area: 0, coords: null });
   const activeToolRef = useRef(null);
+
+  // Intercept tool changes — alert if HUSO required but not set
+  const handleToolChange = (tool) => {
+    if ((tool === 'coordinates' || tool === 'go_to_cadastre') && !huso) {
+      if (onHusoRequired) onHusoRequired();
+      return;
+    }
+    setActiveTool(tool);
+  };
 
   useEffect(() => {
     if (!mapRef.current || mapInstance.current) return;
@@ -86,6 +110,7 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
       maxNativeZoom: 19,
       maxZoom: 24,
     });
+    mainCatastroLayerRef.current = catastroLayer;
 
 
     defaultLayer.addTo(initialMap);
@@ -175,7 +200,7 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
     const utmControl = L.Control.extend({
       onAdd: function() {
         const div = L.DomUtil.create('div', 'coordinates-tracker');
-        div.innerHTML = `<span>COORDENADAS UTM (${huso || '25830'})</span><div id="utm-coords-display">ESPERANDO MOVIMIENTO...</div>`;
+        div.innerHTML = `<span>COORDENADAS UTM (${husoRef.current || '25830'})</span><div id="utm-coords-display">ESPERANDO MOVIMIENTO...</div>`;
         return div;
       }
     });
@@ -186,7 +211,7 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
 
     const onMouseMove = (e) => {
       const { lat, lng } = e.latlng;
-      const epsgCode = `EPSG:${huso || '25830'}`;
+      const epsgCode = `EPSG:${husoRef.current || '25830'}`;
       try {
         const utm = proj4('EPSG:4326', epsgCode, [lng, lat]);
         const display = document.getElementById('utm-coords-display');
@@ -196,7 +221,7 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
       } catch (err) {
         const display = document.getElementById('utm-coords-display');
         if (display) {
-          display.innerHTML = `Error UTM (${huso || '25830'})`;
+          display.innerHTML = `Error UTM (${husoRef.current || '25830'})`;
         }
       }
     };
@@ -207,13 +232,13 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
     const onMapClick = async (e) => {
       if (activeToolRef.current === 'coordinates' || activeToolRef.current === 'go_to_cadastre') {
         const { lat, lng } = e.latlng;
-        const epsgCode = `EPSG:${huso || '25830'}`;
+        const epsgCode = `EPSG:${husoRef.current || '25830'}`;
         try {
           const utm = proj4('EPSG:4326', epsgCode, [lng, lat]);
           
           if (activeToolRef.current === 'go_to_cadastre') {
-             if (!huso) {
-                 alert("Por favor, selecciona primero tu Sistema de Referencia (HUSO) en el panel lateral para poder llevarte al lugar exacto del Catastro.");
+             if (!husoRef.current) {
+                 onShowHusoAlert();
                  return;
              }
 
@@ -243,7 +268,7 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
                 <b>COORDINADAS UTM</b><br/>
                 X: ${utm[0].toFixed(3)}<br/>
                 Y: ${utm[1].toFixed(3)}<br/>
-                EPSG: ${huso || '25830'}
+                EPSG: ${husoRef.current || '25830'}
               </div>
             `)
             .openOn(initialMap);
@@ -305,7 +330,7 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
         mapInstance.current = null;
       }
     };
-  }, [huso]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!mapInstance.current || !featuresLayer.current) return;
@@ -327,6 +352,8 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
       const isSpecialType = parcelClassName !== '';
       const isOverlapWarning = parcelClassName === 'overlap-warning';
       
+      if (!p.geometry) return;
+
       const geojson = L.geoJSON(p.geometry, {
         style: () => {
           if (isOverlapWarning) return { className: 'overlap-highlight-svg', color: '#f59e0b', weight: 3, fillOpacity: 0.4 };
@@ -336,12 +363,40 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
             color: options.color || '#3388ff',
             weight: options.weight || 2,
             fillOpacity: options.fillOpacity || 0.2,
-            className: options.className || ''
+            className: [options.className, p.id === selectedParcelId ? 'selected-parcel-highlight' : ''].filter(Boolean).join(' ') || undefined
           };
         }
       });
 
       geojson.eachLayer((layer) => {
+        // Build rich tooltip with name, area, perimeter, vertices, huso
+        const geom0 = p.geometry?.geometry || p.geometry;
+        let vertexCount = 0;
+        if (geom0?.coordinates) {
+          const rings = geom0.type === 'Polygon' ? geom0.coordinates
+            : geom0.type === 'MultiPolygon' ? geom0.coordinates.flat(1)
+            : geom0.type === 'LineString' ? [geom0.coordinates]
+            : [];
+          rings.forEach(ring => {
+            // Count unique vertices (exclude duplicate closing point)
+            const last = ring[ring.length - 1];
+            const first = ring[0];
+            const closedDup = ring.length > 1 && Math.abs(first[0]-last[0]) < 0.000001 && Math.abs(first[1]-last[1]) < 0.000001;
+            vertexCount += closedDup ? ring.length - 1 : ring.length;
+          });
+        }
+
+        const perimeterM = (p.originalCoords || []).reduce((acc, ring) => {
+          let d = 0;
+          for (let i = 0; i < ring.length - 1; i++) {
+            const dx = ring[i+1][0] - ring[i][0];
+            const dy = ring[i+1][1] - ring[i][1];
+            d += Math.sqrt(dx*dx + dy*dy);
+          }
+          return acc + d;
+        }, 0);
+        const perimeterStr = perimeterM > 0 ? `${perimeterM.toLocaleString('es-ES', { maximumFractionDigits: 1 })} m` : 'N/D';
+
         let areaStr = 'Superficie no disp.';
         if (p.area) {
           if (p.area >= 10000) {
@@ -350,12 +405,14 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
             areaStr = `${p.area.toLocaleString('es-ES', { maximumFractionDigits: 2 })} m²`;
           }
         }
-        
+
         const defaultTooltip = `
           <div class="custom-tooltip">
-            <div class="value-name">${p.name}</div>
+            <div class="value-name">${p.name || 'Sin nombre'}</div>
             <div class="value-detail">Área: <strong>${areaStr}</strong></div>
-            ${p.huso ? `<div class="value-detail">Huso: ${p.huso}</div>` : ''}
+            <div class="value-detail">Perímetro: <strong>${perimeterStr}</strong></div>
+            <div class="value-detail">Vértices: <strong>${vertexCount}</strong></div>
+            ${p.huso ? `<div class="value-detail">Huso: <strong>EPSG:${p.huso}</strong></div>` : ''}
           </div>
         `;
 
@@ -374,6 +431,16 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
             const updatedGeojson = e.target.toGeoJSON();
             onGeometryEdited(p.id, updatedGeojson);
           });
+        }
+
+        // Click on map polygon → select this parcel in sidebar
+        const isSpecialOrCadastre = isSpecialType || p.isCadastre;
+        if (!isSpecialOrCadastre && onSelectParcel) {
+          layer.on('click', (e) => {
+            L.DomEvent.stopPropagation(e);
+            onSelectParcel(p);
+          });
+          layer.getElement && (layer.options.cursor = 'pointer');
         }
 
         if (p.geometry) {
@@ -429,16 +496,6 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
                       iconAnchor: [10, 10]
                     });
                     L.marker([coord[1], coord[0]], { icon: noirIcon, interactive: false }).addTo(layerGroup);
-                  } else {
-                    const marker = L.circleMarker([coord[1], coord[0]], {
-                      radius: 4,
-                      color: p.isCadastre ? '#ff0000' : '#00ff00',
-                      weight: 1,
-                      fillColor: '#fff',
-                      fillOpacity: 0.8,
-                      className: 'vertex-marker'
-                    });
-                    marker.addTo(layerGroup);
                   }
                   globalVIdx++;
                 });
@@ -474,25 +531,33 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
     ];
 
 
-    parcels.forEach((p, idx) => {
-      // Only enable editing for regular parcels (not overlaps/reference layers)
-      const isRegularParcel = !p.properties || (p.properties.type !== 'overlap_warning');
-      const isReference = p.isCadastre || p.isDxf;
-      
-      let color = '#3388ff';
-      if (!isReference && isRegularParcel) {
-          color = PALETTE[idx % PALETTE.length];
-      } else if (p.isCadastre) {
-          color = '#ff0000';
-      } else if (p.properties?.type === 'overlap_warning') {
-          color = '#ffcc00';
-      }
+    try {
+      parcels.forEach((p, idx) => {
+        // Only enable editing for regular parcels (not overlaps/reference layers)
+        const isRegularParcel = !p.properties || (p.properties.type !== 'overlap_warning');
+        const isReference = p.isCadastre || p.isDxf;
+        
+        let color = '#3388ff';
+        if (!isReference && isRegularParcel) {
+            color = PALETTE[idx % PALETTE.length];
+        } else if (p.isCadastre) {
+            color = '#ff0000';
+        } else if (p.properties?.type === 'overlap_warning') {
+            color = '#ffcc00';
+        }
 
-      drawParcel(p, { 
-        editable: isRegularParcel,
-        color: color
+        try {
+          drawParcel(p, { 
+            editable: isRegularParcel,
+            color: color
+          });
+        } catch (err) {
+          console.error(`Error drawing parcel ${p.id}:`, err);
+        }
       });
-    });
+    } catch (err) {
+      console.error('Error in parcels.forEach:', err);
+    }
 
     if (adjustmentSession) {
       const adjustmentBoundsList = [];
@@ -519,7 +584,7 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
       if (adjustmentBoundsList.length > 0) {
         const adjBounds = L.latLngBounds(adjustmentBoundsList);
         let zoom = mapInstance.current.getBoundsZoom(adjBounds);
-        zoom = Math.max(15, Math.min(22, zoom));
+        zoom = Math.max(15, Math.min(18, zoom));
         mapInstance.current.flyTo(adjBounds.getCenter(), zoom, { duration: 1.5 });
         return; 
       }
@@ -528,45 +593,118 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
     const sessionJustCleared = prevAdjustmentSession.current && !adjustmentSession;
     prevAdjustmentSession.current = adjustmentSession;
 
-    if (allCoordsForBounds.length > 0 && !sessionJustCleared) {
+    // Only auto-frame (fitBounds) if the number of parcels changed (loaded or cleared)
+    // or if an adjustment session was just cleared.
+    const parcelsChanged = parcels.length !== prevParcelsLength.current;
+    prevParcelsLength.current = parcels.length;
+
+    if (allCoordsForBounds.length > 0 && (parcelsChanged || sessionJustCleared)) {
       const bounds = L.latLngBounds(allCoordsForBounds);
       const zoom = mapInstance.current.getBoundsZoom(bounds);
       if (zoom < 10) {
         mapInstance.current.setView(bounds.getCenter(), 14);
       } else {
-        mapInstance.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 19 });
+        mapInstance.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 17 });
       }
-    } else if (parcels.length === 0) {
+    } else if (parcels.length === 0 && parcelsChanged) {
       mapInstance.current.setView(SPAIN_CENTER, DEFAULT_ZOOM);
     }
-
-  }, [parcels, adjustmentSession, expandedParcelIds]);
+  }, [parcels, adjustmentSession, expandedParcelIds, selectedParcelId]);
 
   useEffect(() => {
     if (!mapInstance.current || !flyToTarget) return;
 
     const { lat, lng, label } = flyToTarget;
-    mapInstance.current.flyTo([lat, lng], 17, { duration: 1.5 });
+    const currentZoom = mapInstance.current.getZoom();
+    // Maintain current zoom level, but ensure it's at least 14 for context
+    const targetZoom = Math.max(currentZoom, 14);
+    mapInstance.current.flyTo([lat, lng], targetZoom, { duration: 1.5 });
 
     const marker = L.marker([lat, lng])
       .addTo(mapInstance.current)
-      .bindPopup(`<b>Referencia Catastral:</b><br/>${label}`)
+      .bindPopup(`
+        <div style="
+          background: rgba(2, 6, 23, 0.95);
+          border: 1px solid rgba(56, 189, 248, 0.4);
+          border-left: 3px solid #38bdf8;
+          color: #f8fafc;
+          font-family: Inter, system-ui, sans-serif;
+          padding: 10px 14px;
+          border-radius: 0;
+          min-width: 160px;
+        ">
+          <div style="font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em; color: #38bdf8; text-transform: uppercase; margin-bottom: 4px;">NOMBRE</div>
+          <div style="font-size: 0.85rem; font-weight: 600; color: #f8fafc;">${label}</div>
+        </div>
+      `, {
+        className: 'dark-popup',
+        maxWidth: 280
+      })
       .openPopup();
 
-    // Remove marker after 10 seconds or when target changes
-    const timer = setTimeout(() => {
-      if (mapInstance.current && marker) {
-        mapInstance.current.removeLayer(marker);
-      }
-    }, 10000);
-
     return () => {
-      clearTimeout(timer);
       if (mapInstance.current && marker) {
         mapInstance.current.removeLayer(marker);
       }
     };
   }, [flyToTarget]);
+
+  // --- HISTORICAL CADASTRE LAYER EFFECT ---
+  useEffect(() => {
+    if (!mapInstance.current) return;
+
+    if (isHistoricalLayerActive) {
+      // Hide current cadastre layer if it's on the map
+      if (mainCatastroLayerRef.current && mapInstance.current.hasLayer(mainCatastroLayerRef.current)) {
+        mapInstance.current.removeLayer(mainCatastroLayerRef.current);
+      }
+
+      if (!historicalLayerRef.current) {
+        historicalLayerRef.current = L.tileLayer.wms('https://ovc.catastro.meh.es/Cartografia/WMS/ServidorWMS.aspx?layer=history', {
+          layers: 'catastro',
+          format: 'image/png',
+          transparent: true,
+          version: '1.1.1',
+          attribution: 'Catastro Histórico',
+          maxNativeZoom: 19,
+          maxZoom: 24,
+          zIndex: 100,
+          tileSize: 256, 
+        });
+      }
+      
+      // Update the TIME parameter. 
+      // Important: We add a small cache-buster only if it really doesn't refresh, 
+      // but Leaflet setParams usually handles this by redrawing.
+      historicalLayerRef.current.setParams({ 
+        TIME: historicalDate,
+        _cb: Date.now() // Force redraw when date changes
+      });
+      
+      if (!mapInstance.current.hasLayer(historicalLayerRef.current)) {
+        historicalLayerRef.current.addTo(mapInstance.current);
+      }
+    } else {
+      // Remove historical layer
+      if (historicalLayerRef.current && mapInstance.current.hasLayer(historicalLayerRef.current)) {
+        mapInstance.current.removeLayer(historicalLayerRef.current);
+      }
+      
+      // We no longer automatically re-add the current cadastre layer here.
+      // This ensures that "no me muestre por defecto la cartografía catastral".
+      // The user can still enable it manually via the Layer Control on the map.
+    }
+  }, [isHistoricalLayerActive, historicalDate]);
+
+  const formatDateDisplay = (dateStr) => {
+    if (!dateStr) return '';
+    try {
+      const parts = dateStr.split('-');
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    } catch (e) {
+      return dateStr;
+    }
+  };
 
   // Effect to handle tool changes
   useEffect(() => {
@@ -600,7 +738,7 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
         try {
           if (activeToolRef.current === 'area') {
             const geojson = layer.toGeoJSON();
-            const targetHuso = huso || '25830';
+            const targetHuso = husoRef.current || '25830';
             
             if (geojson.geometry && geojson.geometry.type === 'Polygon') {
                const projectedRing = closeRing(transformFromWGS84(geojson.geometry.coordinates[0], targetHuso));
@@ -629,12 +767,24 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
     <div style={{ height: '100%', width: '100%', position: 'relative' }}>
       <div ref={mapRef} style={{ height: '100%', width: '100%', zIndex: 1, position: 'relative' }}></div>
       
+      {/* Historical HUD */}
+      {isHistoricalLayerActive && (
+        <div className="historical-hud">
+          <div className="hud-header">
+            <History size={16} color="#38bdf8" />
+            <span>CARTOGRAFÍA HISTÓRICA</span>
+          </div>
+          <div className="hud-date-large">{formatDateDisplay(historicalDate)}</div>
+        </div>
+      )}
+      
       <MapTools 
-        activeTool={activeTool} 
-        onToolChange={setActiveTool} 
+        activeTool={activeTool}
+        onToolChange={handleToolChange}
         measurements={measurements}
         areaUnit={areaUnit}
         setAreaUnit={setAreaUnit}
+        huso={huso}
       />
     </div>
   );

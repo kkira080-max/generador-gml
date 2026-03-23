@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Wrench, Ruler, Square, Crosshair, ChevronLeft, ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
 
-export default function MapTools({ onToolChange, activeTool, measurements = {}, areaUnit, setAreaUnit }) {
+export default function MapTools({ onToolChange, activeTool, measurements = {}, areaUnit, setAreaUnit, huso }) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeMenu, setActiveMenu] = useState(null); // 'mediciones' | 'coordenadas' | 'catastro' | null
 
@@ -64,7 +64,9 @@ export default function MapTools({ onToolChange, activeTool, measurements = {}, 
             <span>Coordenadas</span>
             <ChevronRight size={14} className="ml-auto" />
           </button>
-          <button className="menu-item" onClick={() => setActiveMenu('catastro')}>
+          <button className="menu-item" onClick={() => {
+            setActiveMenu('catastro');
+          }}>
             <ExternalLink size={16} />
             <span>Ir al Catastro</span>
             <ChevronRight size={14} className="ml-auto" />

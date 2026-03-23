@@ -6,13 +6,14 @@ import { detectAndSubtractIslands } from './utils/islandDetection';
 import { generateBuildingGML } from './utils/buildingGmlGenerator';
 import { fetchParcelsByBbox } from './utils/cadastreService';
 import { performIvgaCheck } from './utils/ivgaValidator';
-import { detectOverlaps, resolveOverlaps, validateTopology } from './utils/overlapResolver';
-import { calculateBbox, transformFromWGS84, transformToWGS84, calculatePolygonArea, closeRing } from './utils/geoUtils';
+import { detectOverlaps, resolveOverlaps } from './utils/overlapResolver';
+import { calculateBbox, transformFromWGS84, transformToWGS84, calculatePolygonArea, closeRing, calculateCentroid, validateTopology, calculatePerimeter } from './utils/geoUtils';
 import * as turf from '@turf/turf';
 import { supabase } from './utils/supabaseClient';
 import BuildingDataModal from './components/BuildingDataModal';
 import SupportModal from './components/SupportModal';
 import LegalModal from './components/LegalModal';
+import ErrorBoundary from './components/ErrorBoundary';
 
 
 function App() {
@@ -34,6 +35,13 @@ function App() {
   const [topologyStatus, setTopologyStatus] = useState({}); // { parcelId: [neighborIds] }
   const [overlappingAreas, setOverlappingAreas] = useState([]); // GeoJSON features of overlaps for mapping
   const [flyToTarget, setFlyToTarget] = useState(null); // { lat, lng, label }
+  const [selectedParcelId, setSelectedParcelId] = useState(null);
+  const [isHistoricalLayerActive, setIsHistoricalLayerActive] = useState(false);
+  const [husoAlertCounter, setHusoAlertCounter] = useState(0); // Incremented to trigger huso alert in Sidebar
+  const [historicalDate, setHistoricalDate] = useState(() => {
+    const d = new Date();
+    return d.toISOString().split('T')[0]; // YYYY-MM-DD
+  });
 
   // --- STATISTICS LOGIC ---
   const [stats, setStats] = useState(() => {
@@ -94,41 +102,15 @@ function App() {
     };
   }, []);
 
+
   useEffect(() => {
-    import('./utils/geoUtils').then(({ transformToWGS84 }) => {
-      let filteredParcels = [];
-      if (detectIslands && rawParcels.length > 0) {
-        filteredParcels = detectAndSubtractIslands(rawParcels);
-      } else {
-        filteredParcels = [...rawParcels];
-      }
+    if (detectIslands && rawParcels.length > 0) {
+      setDisplayParcels(detectAndSubtractIslands(rawParcels));
+    } else {
+      setDisplayParcels(rawParcels);
+    }
+  }, [rawParcels, detectIslands]);
 
-      // Reparameterize geometry for DXF files based on the global `huso` state
-      const updatedParcels = filteredParcels.map(p => {
-        const isDxf = p.filename && p.filename.toLowerCase().endsWith('.dxf');
-        if (isDxf && huso) {
-          try {
-            // Apply new projection mapping to original coordinates
-            const newGeometryCoords = p.originalCoords.map(ring => transformToWGS84(ring, huso));
-            return {
-              ...p,
-              huso: huso,
-              geometry: {
-                ...p.geometry,
-                coordinates: p.geometry.type === 'MultiPolygon' ? [newGeometryCoords] : newGeometryCoords // Adjust nested array structure
-              }
-            };
-          } catch (e) {
-            console.error("Coordinate transformation failed for DXF", e);
-            return p;
-          }
-        }
-        return p;
-      });
-
-      setDisplayParcels(updatedParcels);
-    });
-  }, [rawParcels, detectIslands, huso]);
 
   // Handlers for state updates from the Sidebar
   const handleFilesParsed = (newParcels) => {
@@ -179,12 +161,37 @@ function App() {
     });
   };
 
+  const handleSelectParcel = (parcel) => {
+    if (!parcel) {
+      setSelectedParcelId(null);
+      return;
+    }
+
+    setSelectedParcelId(parcel.id);
+    
+    // Get centroid for flying to
+    const rings = parcel.originalCoords || [];
+    if (rings.length > 0) {
+      const centroidUTM = calculateCentroid(rings[0]);
+      const centroidWGSArr = transformToWGS84([centroidUTM], parcel.huso || huso || '25830');
+      
+      if (centroidWGSArr && centroidWGSArr.length > 0) {
+        const centroidWGS = centroidWGSArr[0];
+        setFlyToTarget({ 
+          lat: centroidWGS[1], 
+          lng: centroidWGS[0], 
+          label: parcel.name 
+        });
+      }
+    }
+  };
+
   // Filter parcels for the map. If it's a DXF and there's no HUSO selected, hide it.
   const mapParcels = [
     ...displayParcels.filter(p => {
       if (!visibleParcelIds.has(p.id)) return false;
       const isDxf = p.filename && p.filename.toLowerCase().endsWith('.dxf');
-      if (isDxf && !huso) return false;
+      if (isDxf && !p.huso) return false;
       return true;
     }),
     ...(adjustmentSession ? adjustmentSession.proposedNeighbors : []),
@@ -562,17 +569,24 @@ function App() {
   return (
     <div className="app-container">
       <div className="map-container">
-        <MapViewer 
-          parcels={mapParcels} 
-          expandedParcelIds={expandedParcelIds} 
+        <ErrorBoundary parcels={displayParcels}>
+          <MapViewer 
+            parcels={mapParcels} 
+            expandedParcelIds={expandedParcelIds} 
           onDrawingCreated={handleDrawingCreated}
           adjustmentSession={adjustmentSession}
           onGeometryEdited={handleGeometryEdited}
           huso={huso}
           flyToTarget={flyToTarget}
+          selectedParcelId={selectedParcelId}
+          onSelectParcel={handleSelectParcel}
+          isHistoricalLayerActive={isHistoricalLayerActive}
+          historicalDate={historicalDate}
           areaUnit={areaUnit}
           setAreaUnit={setAreaUnit}
+          onHusoRequired={() => { setHusoAlertCounter(c => c + 1); }}
         />
+        </ErrorBoundary>
       </div>
       <Sidebar 
         parcels={displayParcels}
@@ -603,6 +617,13 @@ function App() {
         onIncrementStat={incrementStat}
         onOpenSupportModal={() => setIsSupportModalOpen(true)}
         onOpenLegalModal={(type) => { setLegalModalType(type); setIsLegalModalOpen(true); }}
+        selectedParcelId={selectedParcelId}
+        onSelectParcel={handleSelectParcel}
+        setIsHistoricalLayerActive={setIsHistoricalLayerActive}
+        historicalDate={historicalDate}
+        setHistoricalDate={setHistoricalDate}
+        husoAlertCounter={husoAlertCounter}
+        onHusoRequired={() => { setHusoAlertCounter(c => c + 1); }}
       />
       <BuildingDataModal 
         isOpen={isBuildingModalOpen} 
