@@ -28,6 +28,7 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
   onSelectParcel,
   isHistoricalLayerActive,
   historicalDate,
+  historicalOpacity,
   areaUnit,
   setAreaUnit,
   onHusoRequired
@@ -94,6 +95,12 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
       })
     ]);
 
+    const lightLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; CartoDB',
+      maxNativeZoom: 19,
+      maxZoom: 24,
+    });
+
     const darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; CartoDB',
       maxNativeZoom: 19,
@@ -116,9 +123,10 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
     defaultLayer.addTo(initialMap);
 
     const baseMaps = {
-      "Predeterminado (Claro)": defaultLayer,
-      "Imagen PNOA": satelliteLayer,
-      "Oscuro": darkLayer,
+      "Fondo Blanquecino": lightLayer,
+      "Fondo Oscuro": darkLayer,
+      "Fondo Satélite": satelliteLayer,
+      "Mapa Predeterminado": defaultLayer,
       "Fondo estilo Autocad": cadLayer
     };
 
@@ -669,7 +677,8 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
           maxNativeZoom: 19,
           maxZoom: 24,
           zIndex: 100,
-          tileSize: 256, 
+          tileSize: 512, 
+          opacity: historicalOpacity
         });
       }
       
@@ -678,8 +687,10 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
       // but Leaflet setParams usually handles this by redrawing.
       historicalLayerRef.current.setParams({ 
         TIME: historicalDate,
-        _cb: Date.now() // Force redraw when date changes
+        _cb: Date.now()
       });
+      
+      historicalLayerRef.current.setOpacity(historicalOpacity);
       
       if (!mapInstance.current.hasLayer(historicalLayerRef.current)) {
         historicalLayerRef.current.addTo(mapInstance.current);
@@ -694,7 +705,7 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
       // This ensures that "no me muestre por defecto la cartografía catastral".
       // The user can still enable it manually via the Layer Control on the map.
     }
-  }, [isHistoricalLayerActive, historicalDate]);
+  }, [isHistoricalLayerActive, historicalDate, historicalOpacity]);
 
   const formatDateDisplay = (dateStr) => {
     if (!dateStr) return '';

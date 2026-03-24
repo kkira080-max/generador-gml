@@ -49,6 +49,8 @@ export default function Sidebar({
   setIsHistoricalLayerActive,
   historicalDate,
   setHistoricalDate,
+  historicalOpacity,
+  setHistoricalOpacity,
   onHusoRequired,
   husoAlertCounter
 }) {
@@ -737,6 +739,30 @@ export default function Sidebar({
             <p style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', fontStyle: 'italic', margin: 0 }}>
               * Seleccione la fecha deseada para consultar la cartografía.
             </p>
+
+            <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: '600' }}>OPACIDAD</span>
+                <span style={{ fontSize: '0.65rem', color: 'var(--accent-primary)', fontWeight: '700' }}>{Math.round(historicalOpacity * 100)}%</span>
+              </div>
+              <input 
+                type="range" 
+                min="0" 
+                max="1" 
+                step="0.05" 
+                value={historicalOpacity} 
+                onChange={(e) => setHistoricalOpacity(parseFloat(e.target.value))}
+                style={{
+                  width: '100%',
+                  height: '4px',
+                  accentColor: 'var(--accent-primary)',
+                  background: 'rgba(255,255,255,0.1)',
+                  borderRadius: '2px',
+                  outline: 'none',
+                  cursor: 'pointer'
+                }}
+              />
+            </div>
           </div>
         )}
       </div>

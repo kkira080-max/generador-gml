@@ -42,6 +42,7 @@ function App() {
     const d = new Date();
     return d.toISOString().split('T')[0]; // YYYY-MM-DD
   });
+  const [historicalOpacity, setHistoricalOpacity] = useState(0.7); 
 
   // --- STATISTICS LOGIC ---
   const [stats, setStats] = useState(() => {
@@ -582,6 +583,7 @@ function App() {
           onSelectParcel={handleSelectParcel}
           isHistoricalLayerActive={isHistoricalLayerActive}
           historicalDate={historicalDate}
+          historicalOpacity={historicalOpacity}
           areaUnit={areaUnit}
           setAreaUnit={setAreaUnit}
           onHusoRequired={() => { setHusoAlertCounter(c => c + 1); }}
@@ -622,6 +624,8 @@ function App() {
         setIsHistoricalLayerActive={setIsHistoricalLayerActive}
         historicalDate={historicalDate}
         setHistoricalDate={setHistoricalDate}
+        historicalOpacity={historicalOpacity}
+        setHistoricalOpacity={setHistoricalOpacity}
         husoAlertCounter={husoAlertCounter}
         onHusoRequired={() => { setHusoAlertCounter(c => c + 1); }}
       />
