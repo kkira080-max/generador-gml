@@ -1760,3 +1760,48 @@ textarea:focus {
   animation: unfold 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
   overflow: hidden;
 }
+
+/* ======================================================
+   COORD SEARCH TOOLS & INPUTS
+   ====================================================== */
+.tool-input, .tool-select {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0;
+  color: var(--accent-primary);
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  font-family: 'JetBrains Mono', monospace;
+  outline: none;
+  transition: var(--transition);
+}
+
+.tool-input:focus, .tool-select:focus {
+  border-color: var(--accent-primary);
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.tool-select {
+  cursor: pointer;
+  appearance: auto;
+}
+
+.coord-search-section {
+  animation: fadeIn 0.4s ease-out;
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 0.75rem;
+}
+
+@keyframes pulse-border-warning {
+  0% { border-color: rgba(251, 191, 36, 0.2); box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.1); }
+  50% { border-color: rgba(251, 191, 36, 1); box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.1); }
+  100% { border-color: rgba(251, 191, 36, 0.2); box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.1); }
+}
+
+.animate-pulse-border {
+  animation: pulse-border-warning 2s infinite;
+}

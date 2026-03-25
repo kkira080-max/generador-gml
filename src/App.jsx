@@ -566,6 +566,24 @@ function App() {
     }
   };
 
+  const handleSearchCoords = ({ x, y, huso: searchHuso }) => {
+    try {
+      // Transform UTM coordinate to WGS84
+      const coordsWGS = transformToWGS84([[x, y]], searchHuso);
+      if (coordsWGS && coordsWGS.length > 0) {
+        setFlyToTarget({ 
+          lat: coordsWGS[0][1], 
+          lng: coordsWGS[0][0], 
+          label: `UTM (${searchHuso}): ${x}, ${y}` 
+        });
+        incrementStat('searches');
+      }
+    } catch (err) {
+      console.error("Coordinate search failed", err);
+      alert("Error al localizar las coordenadas. Verifica el Huso (EPSG).");
+    }
+  };
+
 
   return (
     <div className="app-container">
@@ -587,6 +605,8 @@ function App() {
           areaUnit={areaUnit}
           setAreaUnit={setAreaUnit}
           onHusoRequired={() => { setHusoAlertCounter(c => c + 1); }}
+          onSearchCoords={handleSearchCoords}
+          onHusoChange={setHuso}
         />
         </ErrorBoundary>
       </div>

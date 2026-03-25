@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { Wrench, Ruler, Square, Crosshair, ChevronLeft, ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
 
-export default function MapTools({ onToolChange, activeTool, measurements = {}, areaUnit, setAreaUnit, huso }) {
+export default function MapTools({ onToolChange, activeTool, measurements = {}, areaUnit, setAreaUnit, huso, onSearchCoords, onHusoChange }) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeMenu, setActiveMenu] = useState(null); // 'mediciones' | 'coordenadas' | 'catastro' | null
 
   const [distUnit, setDistUnit] = useState('m'); // 'm' | 'km'
+  const [searchX, setSearchX] = useState('');
+  const [searchY, setSearchY] = useState('');
 
   const currentToolType = activeTool === 'area' ? 'area' : 'distance';
 
@@ -37,6 +39,45 @@ export default function MapTools({ onToolChange, activeTool, measurements = {}, 
     if (distUnit === 'km') return (distM / 1000).toLocaleString('es-ES', { maximumFractionDigits: 3 }) + ' km';
     return distM.toLocaleString('es-ES', { maximumFractionDigits: 2 }) + ' m';
   };
+
+  const handleSearch = () => {
+    if (!searchX || !searchY) {
+      alert("Introduce las coordenadas X e Y.");
+      return;
+    }
+    const targetHuso = huso;
+    if (!targetHuso) {
+      alert("Selecciona el Huso (EPSG) en el desplegable.");
+      return;
+    }
+    onSearchCoords({
+      x: parseFloat(searchX),
+      y: parseFloat(searchY),
+      huso: targetHuso
+    });
+  };
+
+  const HusoSelector = () => (
+    <div className="input-field" style={{ gridColumn: 'span 2', marginBottom: '8px' }}>
+      <label style={{ fontSize: '0.6rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>SISTEMA DE REFERENCIA (OBLIGATORIO)</label>
+      <select 
+        value={huso || ''} 
+        onChange={(e) => onHusoChange(e.target.value)}
+        className="tool-select animate-pulse-border"
+        style={{ width: '100%', borderColor: !huso ? 'var(--accent-warning)' : 'rgba(255,255,255,0.1)' }}
+      >
+         <option value="">-- SELECCIONA HUSO --</option>
+         <option value="25827">HUSO 27 (EPSG:25827)</option>
+         <option value="25828">HUSO 28 (EPSG:25828)</option>
+         <option value="25829">HUSO 29 (EPSG:25829)</option>
+         <option value="25830">HUSO 30 (EPSG:25830)</option>
+         <option value="25831">HUSO 31 (EPSG:25831)</option>
+         <option value="4082">HUSO 27 (EPSG:4082 REGCAN)</option>
+         <option value="4083">HUSO 28 (EPSG:4083 REGCAN)</option>
+         <option value="32628">HUSO 28 (EPSG:32628 WGS84)</option>
+      </select>
+    </div>
+  );
 
   return (
     <div className="map-tools-container">
@@ -85,6 +126,8 @@ export default function MapTools({ onToolChange, activeTool, measurements = {}, 
           </div>
 
           <div className="panel-body">
+            {!huso && <HusoSelector />}
+            
             <div className="tools-controls-row">
               <div className="tools-select-container">
                 {currentToolType === 'distance' ? (
@@ -124,9 +167,15 @@ export default function MapTools({ onToolChange, activeTool, measurements = {}, 
             {/* Live Result Display */}
             {(activeTool === 'distance' || activeTool === 'area') && (
               <div className="tools-live-result">
-                <span className="result-value">
-                  {activeTool === 'distance' ? formatDistance(measurements.distance) : formatArea(measurements.area)}
-                </span>
+                {huso ? (
+                  <span className="result-value">
+                    {activeTool === 'distance' ? formatDistance(measurements.distance) : formatArea(measurements.area)}
+                  </span>
+                ) : (
+                  <span className="result-value" style={{ color: 'var(--accent-warning)', fontSize: '0.7rem' }}>
+                    SELECCIONA HUSO PARA MEDIR
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -143,8 +192,8 @@ export default function MapTools({ onToolChange, activeTool, measurements = {}, 
             <span className="panel-title">COORDENADAS</span>
           </div>
 
-          <div className="panel-body">
-            <div className="tools-controls-row" style={{ justifyContent: 'center' }}>
+          <div className="panel-body" style={{ maxHeight: '350px', overflowY: 'auto' }}>
+            <div className="tools-controls-row" style={{ justifyContent: 'center', marginBottom: '14px' }}>
               <button
                 className={`tool-btn-full ${activeTool === 'coordinates' ? 'active' : ''}`}
                 onClick={() => handleToolClick('coordinates')}
@@ -155,7 +204,7 @@ export default function MapTools({ onToolChange, activeTool, measurements = {}, 
             </div>
 
             {activeTool === 'coordinates' && measurements.coords ? (
-              <div className="tools-live-result coord-grid">
+              <div className="tools-live-result coord-grid" style={{ marginBottom: '16px' }}>
                 <div className="coord-item">
                   <span className="coord-label">X:</span>
                   <span className="coord-val">{measurements.coords.x.toFixed(3)}</span>
@@ -170,10 +219,48 @@ export default function MapTools({ onToolChange, activeTool, measurements = {}, 
                 </div>
               </div>
             ) : activeTool === 'coordinates' ? (
-              <div className="tools-live-result pending-msg">
+              <div className="tools-live-result pending-msg" style={{ marginBottom: '16px' }}>
                 Selecciona el Huso. Haz clic en el mapa...
               </div>
             ) : null}
+
+            {/* BUSCADOR DE COORDENADAS */}
+            <div className="coord-search-section" style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '16px', marginTop: '4px' }}>
+               <span style={{ fontSize: '0.65rem', fontWeight: '800', color: 'var(--accent-primary)', textTransform: 'uppercase', marginBottom: '10px', display: 'block', letterSpacing: '0.05em' }}>
+                 Buscador de Coordenadas UTM
+               </span>
+               <div className="search-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px' }}>
+                  <div className="input-field">
+                    <label style={{ fontSize: '0.6rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Coordenada X (Este)</label>
+                    <input 
+                      type="number" 
+                      value={searchX} 
+                      onChange={(e) => setSearchX(e.target.value)}
+                      placeholder="Ej: 400000"
+                      className="tool-input"
+                    />
+                  </div>
+                  <div className="input-field">
+                    <label style={{ fontSize: '0.6rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Coordenada Y (Norte)</label>
+                    <input 
+                      type="number" 
+                      value={searchY} 
+                      onChange={(e) => setSearchY(e.target.value)}
+                      placeholder="Ej: 4000000"
+                      className="tool-input"
+                    />
+                  </div>
+                  {!huso && <HusoSelector />}
+                  <button 
+                    className="btn btn-primary btn-sm" 
+                    style={{ gridColumn: 'span 2', marginTop: '4px', height: '32px', fontSize: '0.7rem' }}
+                    onClick={handleSearch}
+                  >
+                    <Crosshair size={14} style={{ marginRight: 8 }} />
+                    LOCALIZAR PUNTO
+                  </button>
+               </div>
+            </div>
           </div>
         </div>
       )}

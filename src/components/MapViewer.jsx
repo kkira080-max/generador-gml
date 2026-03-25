@@ -31,7 +31,9 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
   historicalOpacity,
   areaUnit,
   setAreaUnit,
-  onHusoRequired
+  onHusoRequired,
+  onSearchCoords,
+  onHusoChange
 }) {
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
@@ -796,6 +798,8 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
         areaUnit={areaUnit}
         setAreaUnit={setAreaUnit}
         huso={huso}
+        onSearchCoords={onSearchCoords}
+        onHusoChange={onHusoChange}
       />
     </div>
   );

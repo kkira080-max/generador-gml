@@ -581,7 +581,15 @@ export default function Sidebar({
           onDragOver={handleDrag}
           onDrop={handleDrop}
           onClick={() => document.getElementById('file-upload').click()}
-          style={{ borderRadius: '0', background: 'rgba(0,0,0,0.2)', padding: '20px' }}
+          style={{ 
+            borderRadius: '0', 
+            background: 'rgba(0,0,0,0.2)', 
+            padding: '40px 20px', 
+            minHeight: '120px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
         >
           <div style={{ textAlign: 'center' }}>
             <p style={{ margin: 0, fontSize: '0.8rem' }}>Arrastra ficheros .gml o .dxf, o haz clic aquí</p>
@@ -794,20 +802,21 @@ export default function Sidebar({
 
 
         {showHusoAlert && (
-          <div ref={husoAlertRef} className="animate-pulse" style={{
-            background: 'rgba(239, 68, 68, 0.15)',
-            border: '1px solid var(--accent-danger)',
-            padding: '10px',
+          <div ref={husoAlertRef} className="animate-pulse-border" style={{
+            background: 'rgba(251, 191, 36, 0.15)',
+            border: '2px solid var(--accent-warning)',
+            padding: '12px',
             marginBottom: '12px',
-            borderRadius: '4px',
-            color: 'var(--accent-danger)',
+            borderRadius: '0',
+            color: 'var(--accent-warning)',
             fontSize: '0.75rem',
-            fontWeight: 700,
+            fontWeight: 800,
             display: 'flex',
             alignItems: 'center',
-            gap: 8
+            gap: 10,
+            boxShadow: '0 0 15px rgba(251, 191, 36, 0.2)'
           }}>
-            <AlertCircle size={16} /> ⚠️ SELECCIONA EL HUSO CORRESPONDIENTE
+            <AlertCircle size={18} /> ⚠️ SISTEMA DE REFERENCIA OBLIGATORIO PARA MEDICIÓN
           </div>
         )}
 
