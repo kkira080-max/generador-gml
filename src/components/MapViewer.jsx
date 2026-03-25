@@ -57,7 +57,7 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
 
   // Intercept tool changes — alert if HUSO required but not set
   const handleToolChange = (tool) => {
-    if ((tool === 'coordinates' || tool === 'go_to_cadastre') && !huso) {
+    if ((tool === 'coordinates' || tool === 'go_to_cadastre' || tool === 'go_to_registradores') && !huso) {
       if (onHusoRequired) onHusoRequired();
       return;
     }
@@ -240,7 +240,7 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
 
     // Coordinate and Cadastre tool click handler
     const onMapClick = async (e) => {
-      if (activeToolRef.current === 'coordinates' || activeToolRef.current === 'go_to_cadastre') {
+      if (activeToolRef.current === 'coordinates' || activeToolRef.current === 'go_to_cadastre' || activeToolRef.current === 'go_to_registradores') {
         const { lat, lng } = e.latlng;
         const epsgCode = `EPSG:${husoRef.current || '25830'}`;
         try {
@@ -248,7 +248,7 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
           
           if (activeToolRef.current === 'go_to_cadastre') {
              if (!husoRef.current) {
-                 onShowHusoAlert();
+                 if (onHusoRequired) onHusoRequired();
                  return;
              }
 
@@ -266,21 +266,118 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
              return;
           }
 
+          if (activeToolRef.current === 'go_to_registradores') {
+             if (!husoRef.current) {
+                 if (onHusoRequired) onHusoRequired();
+                 return;
+             }
+
+             const x = utm[0].toFixed(3);
+             const y = utm[1].toFixed(3);
+             const epsg = husoRef.current || '25830';
+
+             // Intentamos obtener la RC para facilitar la búsqueda en el Geoportal
+             let rc = null;
+             try {
+                rc = await fetchRcByCoordinates(utm[0], utm[1], epsgCode);
+             } catch (err) {
+                console.error("No se pudo obtener la RC para el Geoportal:", err);
+             }
+             
+             const popupContent = `
+               <div style="background: #111; padding: 15px; border-radius: 2px; border-left: 3px solid #38bdf8; width: 260px; font-family: 'Inter', sans-serif;">
+                 <div style="font-size: 0.65rem; color: #38bdf8; font-weight: 800; margin-bottom: 12px; letter-spacing: 0.05em;">ASISTENTE REGISTRADORES</div>
+                 
+                 <div style="background: rgba(255,255,255,0.05); padding: 8px 10px; border-radius: 2px; margin-bottom: 12px; border: 1px solid ${rc ? 'rgba(56, 189, 248, 0.3)' : 'rgba(255,255,255,0.1)'};">
+                   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                     <span style="font-size: 0.55rem; color: rgba(255,255,255,0.4); text-transform: uppercase;">REF. CATASTRAL (RECOMENDADO)</span>
+                     ${rc ? `<button onclick="navigator.clipboard.writeText('${rc}'); this.innerText='✓'; setTimeout(()=>this.innerText='📋', 1000)" 
+                               style="background: #38bdf8; border: none; padding: 2px 6px; border-radius: 2px; color: black; font-weight: bold; cursor: pointer; font-size: 0.6rem;">📋</button>` : ''}
+                   </div>
+                   <span style="font-size: 0.9rem; color: ${rc ? '#38bdf8' : 'rgba(255,255,255,0.3)'}; font-family: monospace; font-weight: 700;">${rc || 'NO DETECTADA'}</span>
+                 </div>
+
+                 <div style="display: flex; gap: 6px; margin-bottom: 6px; align-items: stretch;">
+                   <div style="flex: 1; background: rgba(255,255,255,0.03); padding: 6px 10px; border-radius: 2px;">
+                     <span style="font-size: 0.5rem; color: rgba(255,255,255,0.3); display: block; margin-bottom: 2px; text-transform: uppercase;">Coordenada X</span>
+                     <span style="font-size: 0.8rem; color: white; font-family: monospace;">${x}</span>
+                   </div>
+                   <button onclick="navigator.clipboard.writeText('${x}'); this.innerText='✓'; setTimeout(()=>this.innerText='📋', 1000)" 
+                           style="background: rgba(255,255,255,0.1); border: none; padding: 0 8px; border-radius: 2px; color: white; cursor: pointer;" title="Copiar X">📋</button>
+                 </div>
+
+                 <div style="display: flex; gap: 6px; margin-bottom: 12px; align-items: stretch;">
+                   <div style="flex: 1; background: rgba(255,255,255,0.03); padding: 6px 10px; border-radius: 2px;">
+                     <span style="font-size: 0.5rem; color: rgba(255,255,255,0.3); display: block; margin-bottom: 2px; text-transform: uppercase;">Coordenada Y</span>
+                     <span style="font-size: 0.8rem; color: white; font-family: monospace;">${y}</span>
+                   </div>
+                   <button onclick="navigator.clipboard.writeText('${y}'); this.innerText='✓'; setTimeout(()=>this.innerText='📋', 1000)" 
+                           style="background: rgba(255,255,255,0.1); border: none; padding: 0 8px; border-radius: 2px; color: white; cursor: pointer;" title="Copiar Y">📋</button>
+                 </div>
+                 
+                 <div style="font-size: 0.6rem; color: rgba(255,255,255,0.4); line-height: 1.4; margin-bottom: 12px;">
+                    Copia la <b>RC</b> y pégala en el buscador del Geoportal. Si no funciona, usa las coordenadas con la herramienta de la lupa.
+                 </div>
+
+                 <a href="https://geoportal.registradores.org/geoportal/" target="_blank" 
+                    style="display: block; width: 100%; padding: 10px; background: #38bdf8; color: black; text-align: center; border-radius: 2px; text-decoration: none; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.05em; transition: 0.2s;">ABRIR GEOPORTAL REGISTRADORES</a>
+               </div>
+             `;
+
+             L.popup({
+               maxWidth: 320,
+               className: 'custom-utm-popup'
+             })
+               .setLatLng(e.latlng)
+               .setContent(popupContent)
+               .openOn(initialMap);
+             
+             return;
+          }
+
           setMeasurements(prev => ({
             ...prev,
             coords: { x: utm[0], y: utm[1], epsg: epsgCode }
           }));
-          
-          L.popup()
-            .setLatLng(e.latlng)
-            .setContent(`
-              <div style="font-family: monospace; font-size: 11px; color: #38bdf8; background: #000; padding: 5px; border-radius: 4px;">
-                <b>COORDINADAS UTM</b><br/>
-                X: ${utm[0].toFixed(3)}<br/>
-                Y: ${utm[1].toFixed(3)}<br/>
-                EPSG: ${husoRef.current || '25830'}
+
+          const xVal = utm[0].toFixed(3);
+          const yVal = utm[1].toFixed(3);
+          const epsgVal = husoRef.current || '25830';
+
+          const coordPopupContent = `
+            <div style="background: #111; padding: 18px; border-radius: 2px; border-left: 3px solid #38bdf8; width: 260px; font-family: 'Inter', sans-serif;">
+              <div style="font-size: 0.7rem; color: #38bdf8; font-weight: 800; margin-bottom: 15px; letter-spacing: 0.1em; text-transform: uppercase;">Coordenadas UTM</div>
+              
+              <div style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;">
+                <div style="flex: 1; background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 2px;">
+                  <span style="font-size: 0.6rem; color: rgba(255,255,255,0.4); display: block; margin-bottom: 2px; text-transform: uppercase;">X (Este)</span>
+                  <span style="font-size: 1rem; color: white; font-family: monospace; font-weight: 600;">${xVal}</span>
+                </div>
+                <button onclick="navigator.clipboard.writeText('${xVal}'); this.innerText='✓'; setTimeout(()=>this.innerText='📋', 1000)" 
+                        style="background: #38bdf8; border: none; padding: 10px; border-radius: 2px; color: black; font-weight: bold; cursor: pointer; transition: 0.2s;" title="Copiar X">📋</button>
               </div>
-            `)
+
+              <div style="display: flex; gap: 8px; margin-bottom: 15px; align-items: center;">
+                <div style="flex: 1; background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 2px;">
+                  <span style="font-size: 0.6rem; color: rgba(255,255,255,0.4); display: block; margin-bottom: 2px; text-transform: uppercase;">Y (Norte)</span>
+                  <span style="font-size: 1rem; color: white; font-family: monospace; font-weight: 600;">${yVal}</span>
+                </div>
+                <button onclick="navigator.clipboard.writeText('${yVal}'); this.innerText='✓'; setTimeout(()=>this.innerText='📋', 1000)" 
+                        style="background: #38bdf8; border: none; padding: 10px; border-radius: 2px; color: black; font-weight: bold; cursor: pointer; transition: 0.2s;" title="Copiar Y">📋</button>
+              </div>
+              
+              <div style="background: rgba(255,255,255,0.03); padding: 6px 12px; border-radius: 2px; font-size: 0.65rem; color: rgba(255,255,255,0.5); text-align: center;">
+                EPSG: ${epsgVal}
+              </div>
+            </div>
+          `;
+
+          L.popup({
+            maxWidth: 320,
+            className: 'custom-utm-popup'
+          })
+            .setLatLng(e.latlng)
+            .setContent(coordPopupContent)
             .openOn(initialMap);
         } catch (err) {
           console.error("Error calculating coordinates", err);

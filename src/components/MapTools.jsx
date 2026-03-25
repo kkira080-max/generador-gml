@@ -105,11 +105,9 @@ export default function MapTools({ onToolChange, activeTool, measurements = {}, 
             <span>Coordenadas</span>
             <ChevronRight size={14} className="ml-auto" />
           </button>
-          <button className="menu-item" onClick={() => {
-            setActiveMenu('catastro');
-          }}>
+          <button className="menu-item" onClick={() => setActiveMenu('visores_externos')}>
             <ExternalLink size={16} />
-            <span>Ir al Catastro</span>
+            <span>Visores Externos</span>
             <ChevronRight size={14} className="ml-auto" />
           </button>
         </div>
@@ -265,29 +263,37 @@ export default function MapTools({ onToolChange, activeTool, measurements = {}, 
         </div>
       )}
 
-      {/* Catastro Panel */}
-      {isOpen && activeMenu === 'catastro' && (
+      {/* Visores Externos Panel */}
+      {isOpen && activeMenu === 'visores_externos' && (
         <div className="map-tools-panel glass-card">
           <div className="panel-header">
             <button className="back-btn" onClick={() => setActiveMenu(null)}>
               <ChevronLeft size={16} />
             </button>
-            <span className="panel-title">SEDE ELECTRÓNICA</span>
+            <span className="panel-title">VISORES OFICIALES</span>
           </div>
 
           <div className="panel-body">
-            <div className="tools-controls-row" style={{ justifyContent: 'center' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <button
                 className={`tool-btn-full ${activeTool === 'go_to_cadastre' ? 'active' : ''}`}
                 onClick={() => handleToolClick('go_to_cadastre')}
               >
                 <ExternalLink size={18} style={{ marginRight: 8 }} />
-                {activeTool === 'go_to_cadastre' ? 'Haz clic en el mapa...' : 'Abrir en Catastro'}
+                {activeTool === 'go_to_cadastre' ? 'Sede Catastro: Pica mapa' : 'Abrir en Catastro'}
+              </button>
+
+              <button
+                className={`tool-btn-full ${activeTool === 'go_to_registradores' ? 'active' : ''}`}
+                onClick={() => handleToolClick('go_to_registradores')}
+              >
+                <Square size={18} style={{ marginRight: 8 }} />
+                {activeTool === 'go_to_registradores' ? 'Registradores: Pica mapa' : 'Geoportal Registradores'}
               </button>
             </div>
-            <p style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', marginTop: '8px', textAlign: 'center', lineHeight: '1.4' }}>
-              Selecciona el Huso. Activa la herramienta "Abrir en Catastro" y pica cualquier punto del mapa y te llevará a la sede electrónica.
-
+            
+            <p style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', marginTop: '12px', textAlign: 'center', lineHeight: '1.4' }}>
+              Selecciona una herramienta y haz clic en cualquier lugar del mapa para abrir la ubicación exacta en el visor oficial.
             </p>
           </div>
         </div>
