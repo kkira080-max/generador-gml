@@ -13,6 +13,7 @@ import { supabase } from './utils/supabaseClient';
 import BuildingDataModal from './components/BuildingDataModal';
 import SupportModal from './components/SupportModal';
 import LegalModal from './components/LegalModal';
+import LinksModal from './components/LinksModal'; 
 import ErrorBoundary from './components/ErrorBoundary';
 
 
@@ -27,6 +28,7 @@ function App() {
   const [isBuildingModalOpen, setIsBuildingModalOpen] = useState(false);
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
   const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
+  const [isLinksModalOpen, setIsLinksModalOpen] = useState(false);
   const [legalModalType, setLegalModalType] = useState('legal'); 
   const [buildingQueue, setBuildingQueue] = useState([]); // Kept for future or internal use if needed
   const [targetParcelForBuilding, setTargetParcelForBuilding] = useState(null);
@@ -639,6 +641,7 @@ function App() {
         onIncrementStat={incrementStat}
         onOpenSupportModal={() => setIsSupportModalOpen(true)}
         onOpenLegalModal={(type) => { setLegalModalType(type); setIsLegalModalOpen(true); }}
+        onOpenLinks={() => setIsLinksModalOpen(true)}
         selectedParcelId={selectedParcelId}
         onSelectParcel={handleSelectParcel}
         setIsHistoricalLayerActive={setIsHistoricalLayerActive}
@@ -660,11 +663,15 @@ function App() {
         isOpen={isSupportModalOpen} 
         onClose={() => setIsSupportModalOpen(false)} 
       />
-      <LegalModal 
-        isOpen={isLegalModalOpen} 
-        onClose={() => setIsLegalModalOpen(false)} 
-        type={legalModalType} 
-      />
+        <LegalModal 
+          isOpen={isLegalModalOpen} 
+          onClose={() => setIsLegalModalOpen(false)} 
+          type={legalModalType} 
+        />
+        <LinksModal 
+          isOpen={isLinksModalOpen} 
+          onClose={() => setIsLinksModalOpen(false)} 
+        />
     </div>
   );
 }

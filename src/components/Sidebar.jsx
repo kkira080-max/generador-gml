@@ -41,8 +41,9 @@ export default function Sidebar({
   onFlyToLocation,
   stats,
   onIncrementStat,
-  onOpenSupportModal,
   onOpenLegalModal,
+  onOpenSupportModal,
+  onOpenLinks,
   selectedParcelId,
   onSelectParcel,
   isHistoricalLayerActive,
@@ -1393,6 +1394,14 @@ export default function Sidebar({
             onMouseOut={(e) => e.target.style.color = 'var(--text-secondary)'}
           >
             Cookies
+          </span>
+          <span
+            onClick={onOpenLinks}
+            style={{ cursor: 'pointer', transition: 'color 0.2s', color: 'var(--accent-primary)', fontWeight: 'bold' }}
+            onMouseOver={(e) => e.target.style.textDecoration = 'underline'}
+            onMouseOut={(e) => e.target.style.textDecoration = 'none'}
+          >
+            Enlaces de Interés
           </span>
           <span
             onClick={onOpenSupportModal}
