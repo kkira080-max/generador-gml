@@ -78,22 +78,30 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
       attribution: '&copy; OpenStreetMap contributors',
       maxNativeZoom: 19,
       maxZoom: 24,
+      keepBuffer: 6,
+      updateWhenIdle: false,
+      updateWhenZooming: false,
+      crossOrigin: true
     });
 
     const satelliteLayer = L.layerGroup([
-      L.tileLayer.wms('https://www.ign.es/wms-inspire/pnoa-ma', {
-        layers: 'OI.OrthoimageCoverage',
-        format: 'image/jpeg',
-        transparent: false,
-        version: '1.3.0',
-        attribution: 'PNOA con origen en servicio web del IGN',
+      L.tileLayer('https://www.ign.es/wmts/pnoa-ma?request=GetTile&service=WMTS&version=1.0.0&Layer=OI.OrthoimageCoverage&Style=default&Format=image/jpeg&TileMatrixSet=GoogleMapsCompatible&TileMatrix={z}&TileRow={y}&TileCol={x}', {
+        attribution: 'PNOA con origen en servicio WMTS del IGN',
         maxNativeZoom: 19,
         maxZoom: 24,
+        keepBuffer: 8,            // Precarga agresivamente los bordes de la zona de trabajo (8 filas de baldosas extras)
+        updateWhenIdle: false,    // Refresca la red mientras mueves el ratón, sin esperar a que pares
+        updateWhenZooming: false, // Evita pedir baldosas intermedias mientras haces scroll para ahorrar ancho de banda al destino final
+        crossOrigin: true         // Aceleración de cacheado en canvas
       }),
       L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png', {
         attribution: '&copy; CartoDB',
         maxNativeZoom: 19,
         maxZoom: 24,
+        keepBuffer: 6,
+        updateWhenIdle: false,
+        updateWhenZooming: false,
+        crossOrigin: true
       })
     ]);
 
@@ -101,12 +109,20 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
       attribution: '&copy; CartoDB',
       maxNativeZoom: 19,
       maxZoom: 24,
+      keepBuffer: 6,
+      updateWhenIdle: false,
+      updateWhenZooming: false,
+      crossOrigin: true
     });
 
     const darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; CartoDB',
       maxNativeZoom: 19,
       maxZoom: 24,
+      keepBuffer: 6,
+      updateWhenIdle: false,
+      updateWhenZooming: false,
+      crossOrigin: true
     });
 
     const cadLayer = L.layerGroup([]);
@@ -116,6 +132,10 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
       transparent: true,
       version: '1.1.1',
       attribution: 'Sede Electrónica del Catastro',
+      tileSize: 512,            // 4x menos peticiones de red al unificar las losas (mejora radical para servidores WMS lentos)
+      keepBuffer: 6,            // Retiene un radio amplio de parcelas en la memoria RAM del navegador
+      updateWhenIdle: false,    // Refresca activamente el Catastro mientras mueves el ratón
+      updateWhenZooming: false,
       maxNativeZoom: 19,
       maxZoom: 24,
     });
@@ -777,6 +797,9 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
           maxZoom: 24,
           zIndex: 100,
           tileSize: 512, 
+          keepBuffer: 4,
+          updateWhenIdle: false,
+          updateWhenZooming: false,
           opacity: historicalOpacity
         });
       }

@@ -271,7 +271,13 @@ export const preValidateMacro = (userParcels, officialParcels) => {
       .filter(c => c && c.length > 0);
 
     const officialPolys = officialParcels
-      .map(p => roundRings(p.originalCoords, 3))
+      .map(p => {
+        const rounded = roundRings(p.originalCoords, 3);
+        if (rounded && p.hasCadastralReference !== undefined) {
+          rounded.hasCadastralReference = p.hasCadastralReference;
+        }
+        return rounded;
+      })
       .filter(c => c && c.length > 0);
 
     if (userPolys.length === 0) return { isValid: false, message: "Parcelas de usuario sin coordenadas." };
@@ -290,6 +296,9 @@ export const preValidateMacro = (userParcels, officialParcels) => {
 
     // El BBox gigante descargará cientos de parcelas.
     const involvedOfficialPolys = officialPolys.filter(oPoly => {
+      // Si el Catastro devolvió un área sin referencia (Dominio Público/Carretera estructural), NO ES UNA PARCELA OBJETIVO NUNCA
+      if (oPoly.hasCadastralReference === false) return false;
+
       try {
         const inter = polygonClipping.intersection(userMacro, oPoly);
         const interArea = calculateMultiPolygonArea(inter);
@@ -309,7 +318,39 @@ export const preValidateMacro = (userParcels, officialParcels) => {
     });
 
     if (involvedOfficialPolys.length === 0) {
-      return { isValid: false, message: "No se identificaron parcelas oficiales directamente afectadas." };
+      // 1. Verificar si hay solapes internos en el propio dibujo del usuario antes de darlo por bueno
+      let tempInternalOverlap = 0;
+      try {
+        for (let i = 0; i < userPolys.length; i++) {
+          for (let j = i + 1; j < userPolys.length; j++) {
+            const inter = polygonClipping.intersection(userPolys[i], userPolys[j]);
+            tempInternalOverlap += calculateMultiPolygonArea(inter);
+          }
+        }
+      } catch (e) {
+        console.warn("Fallo interno aislacion:", e.message);
+      }
+
+      if (tempInternalOverlap > 1.0) {
+        return { 
+          isValid: false, 
+          message: `NEGATIVO: Existe una INVASIÓN o superposición entre geometrías del propio dibujo (${tempInternalOverlap.toFixed(2)} m² superpuestos). Revisa los límites internos.` 
+        };
+      }
+
+      // 2. Si es íntegramente dominio público, es Positivo
+      const uArea = calculateMultiPolygonArea(userMacro);
+      return { 
+        isValid: true, 
+        isPublicDomain: true,
+        userArea: uArea,
+        officialArea: 0,
+        diffArea: uArea,
+        overlapPercent: 0,
+        gapArea: 0,
+        overlapInvasionArea: uArea,
+        message: `POSITIVO (DOMINIO PÚBLICO): El polígono se encuentra íntegramente en zona sin referencia catastral (Dominio Público) (${uArea.toFixed(2)} m²).` 
+      };
     }
 
     // 4. Union de solo las parcelas oficiales afectadas para reconstruir la forma original del Catastro
@@ -343,6 +384,8 @@ export const preValidateMacro = (userParcels, officialParcels) => {
 
     let gapArea = 0;
     let overlapInvasionArea = 0;
+    let thirdPartyInvasionArea = 0;
+    let publicDomainArea = 0;
 
     try {
       const userFeature = turf.multiPolygon(userMacro);
@@ -361,6 +404,20 @@ export const preValidateMacro = (userParcels, officialParcels) => {
       const invasionMultiPoly = polygonClipping.difference(userMacro, officialBuffered.geometry.coordinates);
       overlapInvasionArea = calculateMultiPolygonArea(invasionMultiPoly);
 
+      // DOMINIO PÚBLICO: Separar invasión a parcelas existentes de invasión a espacio en blanco
+      if (overlapInvasionArea > 0) {
+          let publicDomainMultiPoly = invasionMultiPoly;
+          for (const oPoly of officialPolys) {
+              if (oPoly.hasCadastralReference === false) continue; // Es dominio público puro, no debe recortarse
+              if (!publicDomainMultiPoly || publicDomainMultiPoly.length === 0) break;
+              try {
+                  publicDomainMultiPoly = polygonClipping.difference(publicDomainMultiPoly, oPoly);
+              } catch (e) { /* Ignorar finca concreta si rompe la topología */ }
+          }
+          publicDomainArea = calculateMultiPolygonArea(publicDomainMultiPoly);
+          thirdPartyInvasionArea = Math.max(0, overlapInvasionArea - publicDomainArea);
+      }
+
     } catch (e) {
       console.warn("Fallo en cálculo con pulmón (usando directo):", e.message);
       // Fallback: Si el buffer falla por topología, usamos la diferencia directa
@@ -368,6 +425,23 @@ export const preValidateMacro = (userParcels, officialParcels) => {
       const intersectionAreaLocal = calculateMultiPolygonArea(intersectionLocal);
       gapArea = Math.abs(officialArea - intersectionAreaLocal);
       overlapInvasionArea = Math.abs(userArea - intersectionAreaLocal);
+      
+      try {
+          // Intentar aislar Dominio Público incluso en Fallback
+          const fallbackInvasion = polygonClipping.difference(userMacro, officialMacro);
+          let publicDomainMultiPoly = fallbackInvasion;
+          for (const oPoly of officialPolys) {
+              if (oPoly.hasCadastralReference === false) continue;
+              if (!publicDomainMultiPoly || publicDomainMultiPoly.length === 0) break;
+              try {
+                  publicDomainMultiPoly = polygonClipping.difference(publicDomainMultiPoly, oPoly);
+              } catch (e) { /* Ignorar finca concreta */ }
+          }
+          publicDomainArea = calculateMultiPolygonArea(publicDomainMultiPoly);
+          thirdPartyInvasionArea = Math.max(0, overlapInvasionArea - publicDomainArea);
+      } catch (err) {
+          thirdPartyInvasionArea = overlapInvasionArea;
+      }
     }
 
     // Calculamos la intersección real para las estadísticas (sin buffer)
@@ -388,11 +462,25 @@ export const preValidateMacro = (userParcels, officialParcels) => {
     // El conjunto se considera VÁLIDO si:
     // 1. La diferencia neta de superficie es <= 1.0 m2
     // 2. No hay solapes internos significativos (> 1 m2)
-    // 3. Y tanto los huecos como las invasiones externas están por debajo de 1.0 m2 (tras pulmón de 1 cm)
+    // 3. Y tanto los huecos como las invasiones a TERCEROS están por debajo de 1.0 m2 (tras pulmón de 1 cm)
     let isValid = areaDiff <= TOLERANCE_M2 && 
                   internalOverlapArea <= TOLERANCE_M2 &&
                   gapArea <= TOLERANCE_M2 && 
-                  overlapInvasionArea <= TOLERANCE_M2;
+                  thirdPartyInvasionArea <= TOLERANCE_M2;
+
+    // LÓGICA DE DOMINIO PÚBLICO:
+    // Si la invasión total supera 1m2 pero recae en zonas sin catastro (Dominio Público)
+    // y el resto de parámetros (huecos, solapes internos, etc.) son válidos...
+    let isPublicDomain = false;
+    
+    // Si el dibujo se asienta predominantemente en vía pública, está permitido,
+    // PERO no puede omitir metros cuadrados de los vecinos legales que toque accidental o intencionadamente (gapArea).
+    if (publicDomainArea > TOLERANCE_M2 && thirdPartyInvasionArea <= TOLERANCE_M2) {
+      if (gapArea <= TOLERANCE_M2 && internalOverlapArea <= TOLERANCE_M2) {
+          isValid = true;
+          isPublicDomain = true;
+      }
+    }
 
     let message = "";
 
@@ -401,24 +489,28 @@ export const preValidateMacro = (userParcels, officialParcels) => {
       isValid = false;
       message = `NEGATIVO: Existe una INVASIÓN o superposición entre geometrías del propio dibujo (${internalOverlapArea.toFixed(2)} m² superpuestos). Revisa los límites internos.`;
     } 
+    // Caso de Dominio Público
+    else if (isPublicDomain) {
+      message = `POSITIVO (DOMINIO PÚBLICO): El polígono excede los límites afectando únicamente a espacio libre no catastrado (${publicDomainArea.toFixed(2)} m²).`;
+    }
     // Caso Especial: Desfase técnico o HUSO diferente
     else if (areaDiff <= TOLERANCE_M2 && (intersectionArea < 1.0 || (overlapInvasionArea > (userArea * 0.95)))) {
       isValid = true;
       message = `POSITIVO: Coincidencia de superficie confirmada (Diferencia: ${areaDiff.toFixed(2)} m²). < 1 m²`;
     } else if (isValid) {
-      if (areaDiff > 0.01 || gapArea > 0.01 || overlapInvasionArea > 0.01) {
+      if (areaDiff > 0.01 || gapArea > 0.01 || thirdPartyInvasionArea > 0.01) {
         message = `POSITIVO: Coincidencia geométrica correcta (con ajuste técnico).`;
       } else {
         message = "POSITIVO: El contorno exterior coincide exactamente con la cartografía oficial.";
       }
     } else {
-      if (overlapInvasionArea > TOLERANCE_M2) {
-        // PRIORIDAD 1: Alertar si el dibujo invade parcelas que NO se han seleccionado (Invasión)
-        message = `NEGATIVO: Existe una INVASIÓN o superposición (solape a terceros) fuera del límite catastral oficial (${overlapInvasionArea.toFixed(2)} m² afectados).`;
+      if (thirdPartyInvasionArea > TOLERANCE_M2) {
+        // PRIORIDAD 1: Alertar si el dibujo invade parcelas que NO se han seleccionado (Invasión a terceros)
+        message = `NEGATIVO: Existe una INVASIÓN o superposición a terceros con referencia catastral oficial (${thirdPartyInvasionArea.toFixed(2)} m² afectados).`;
       } else if (gapArea > TOLERANCE_M2) {
         // PRIORIDAD 2: Alertar si falta superficie (Hueco/Merma)
         message = `NEGATIVO: Existe un HUECO o merma respecto al área catastral original superior al margen de 1m² (${gapArea.toFixed(2)} m² faltantes).`;
-      } else if (areaDiff > TOLERANCE_M2) {
+      } else if (!isPublicDomain && areaDiff > TOLERANCE_M2 && thirdPartyInvasionArea <= TOLERANCE_M2) {
         // PRIORIDAD 3: Alertar si la superficie total no cuadra
         message = `NEGATIVO: La superficie total no coincide con la del Catastro (Diferencia: ${areaDiff.toFixed(2)} m²).`;
       } else {

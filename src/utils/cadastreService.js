@@ -84,11 +84,44 @@ const parseWfsGml = (xmlString, huso) => {
     const feature = features[i];
     
     // Prioritize nationalCadastralReference, then localId
-    const nationalRef = feature.getElementsByTagNameNS('*', 'nationalCadastralReference')[0]?.textContent;
-    const localId = feature.getElementsByTagNameNS('*', 'localId')[0]?.textContent;
-    const ref = nationalRef || localId || `PARCELA-${i}`;
+    const nationalRefNode = feature.getElementsByTagNameNS('*', 'nationalCadastralReference')[0];
+    let nationalRef = nationalRefNode ? nationalRefNode.textContent.trim() : '';
+
+    const localIdNode = feature.getElementsByTagNameNS('*', 'localId')[0];
+    const localId = localIdNode ? localIdNode.textContent.trim() : '';
+
+    // El Catastro a veces omite <nationalCadastralReference> en parcelas 100% legales
+    // pero te las incluye encapsuladas en el <localId> europeo (ES.SDGC.CP.xxxx...)
+    if (!nationalRef && localId) {
+        let extracted = localId.replace('ES.SDGC.CP.', '').replace('ES.SDGC.PA.', '');
+        if (extracted.length >= 14 && !/^0+$/.test(extracted)) {
+            nationalRef = extracted;
+        }
+    }
+
+    const labelNode = feature.getElementsByTagNameNS('*', 'label')[0];
+    const textLabel = labelNode ? labelNode.textContent.trim() : '';
+
+    let isPublicDomain = false;
     
-    const label = feature.getElementsByTagNameNS('*', 'label')[0]?.textContent || ref;
+    // 1. Si no hay referencia nacional
+    if (!nationalRef || nationalRef === '' || /^0+$/.test(nationalRef)) {
+       isPublicDomain = true;
+    } 
+    // 2. Si la referencia catrastral es ilegítima (demasiado corta)
+    else if (nationalRef.length < 14) {
+       isPublicDomain = true;
+    }
+
+    // 3. Fallback visual adicional para etiquetas explícitas de dominio público
+    if (textLabel && (textLabel.toUpperCase() === 'VD' || textLabel.toUpperCase() === 'VR')) {
+       isPublicDomain = true;
+    }
+
+    const hasCadastralReference = !isPublicDomain;
+    
+    const ref = nationalRef || localId || `PARCELA-${i}`;
+    const label = textLabel || ref;
     
     // Extract geometry preserving MultiPolygon structure (Islands and Holes)
     const multiPolygon = [];
@@ -186,6 +219,7 @@ const parseWfsGml = (xmlString, huso) => {
         id: `cadastre-${ref}-${i}`,
         name: ref,
         label: label,
+        hasCadastralReference: hasCadastralReference,
         filename: `${ref}.gml`,
         originalCoords: multiPolygon, // Esto AHORA ES un verdadero MultiPolygon: [ [ext, int], [ext] ]
         area: Math.round(Math.abs(areaM2)),
