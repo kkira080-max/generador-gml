@@ -1,0 +1,35 @@
+<cp:CadastralParcel gml:id="ES.SDGC.CP.0004506VK4700C">
+      <cp:areaValue uom="m2">120</cp:areaValue>
+      <cp:beginLifespanVersion>2010-07-15T00:00:00</cp:beginLifespanVersion>
+      <cp:endLifespanVersion xsi:nil="true" nilReason="http://inspire.ec.europa.eu/codelist/VoidReasonValue/Unpopulated"></cp:endLifespanVersion>
+      <cp:geometry>
+        <gml:MultiSurface gml:id="MultiSurface_ES.SDGC.CP.0004506VK4700C" srsName="http://www.opengis.net/def/crs/EPSG/0/25830">
+          <gml:surfaceMember>
+            <gml:Surface gml:id="Surface_ES.SDGC.CP.0004506VK4700C.1" srsName="http://www.opengis.net/def/crs/EPSG/0/25830">
+              <gml:patches>
+                <gml:PolygonPatch>
+                <gml:exterior>
+                    <gml:LinearRing>
+                      <gml:posList srsDimension="2" count="9">439980.37 4470278.04 439979.6 4470283.99 439986.28 4470284.83 439999.39 4470286.47 439999.46 4470286.48 440000.23 4470280.53 440000.17 4470280.51 439984.06 4470278.5 439980.37 4470278.04</gml:posList>
+                    </gml:LinearRing>
+                </gml:exterior>
+                </gml:PolygonPatch>
+              </gml:patches>
+            </gml:Surface>
+          </gml:surfaceMember>
+        </gml:MultiSurface>
+      </cp:geometry>
+      <cp:inspireId>
+        <Identifier xmlns="http://inspire.ec.europa.eu/schemas/base/3.3">
+          <localId>0004506VK4700C</localId>
+          <namespace>ES.SDGC.CP</namespace>
+        </Identifier>
+      </cp:inspireId>
+      <cp:label>06</cp:label>
+      <cp:nationalCadastralReference>0004506VK4700C</cp:nationalCadastralReference>
+      <cp:referencePoint>
+        <gml:Point gml:id="ReferencePoint_ES.SDGC.CP.0004506VK4700C" srsName="http://www.opengis.net/def/crs/EPSG/0/25830"> 
+          <gml:pos>439989.91 4470280.76</gml:pos>
+        </gml:Point>
+      </cp:referencePoint>
+    </cp:CadastralParcel>

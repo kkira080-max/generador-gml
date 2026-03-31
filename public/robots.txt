@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# Recuerda cambiar TUDOMINIO.com por el dominio real cuando lo publiques
+Sitemap: https://generador-gml.xyz/sitemap.xml

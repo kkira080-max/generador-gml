@@ -57,81 +57,55 @@ export const performIvgaCheck = (proposedParcels, referenceParcels) => {
       return feature;
     });
 
-    // 2. Identify Internal Overlaps (Optional check now, just for informative purposes)
-    const internalOverlaps = [];
-    for (let i = 0; i < proposedFeatures.length; i++) {
-      for (let j = i + 1; j < proposedFeatures.length; j++) {
-        const intersection = turf.intersect(turf.featureCollection([proposedFeatures[i], proposedFeatures[j]]));
-        if (intersection) {
-          const area = calculateFeatureArea(intersection);
-          if (area > 0.05) {
-            reportGeometries.internalOverlaps.push(intersection);
-            internalOverlaps.push(`Solape interno de ${area.toFixed(2)} m².`);
-          }
+  // 2. Identify Internal Overlaps (Optional check now, just for informative purposes)
+  const internalOverlaps = [];
+  for (let i = 0; i < proposedFeatures.length; i++) {
+    for (let j = i + 1; j < proposedFeatures.length; j++) {
+      const intersection = turf.intersect(turf.featureCollection([proposedFeatures[i], proposedFeatures[j]]));
+      if (intersection) {
+        const area = calculateFeatureArea(intersection);
+        if (area > 0.05) {
+          reportGeometries.internalOverlaps.push(intersection);
+          internalOverlaps.push(`Solape interno de ${area.toFixed(2)} m².`);
         }
       }
     }
+  }
 
-    // 3. Prepare Proposed Union
-    let proposedUnion = proposedFeatures[0];
-    for (let i = 1; i < proposedFeatures.length; i++) {
-      proposedUnion = turf.union(turf.featureCollection([proposedUnion, proposedFeatures[i]]));
-    }
+  // 3. Prepare Proposed Union
+  let proposedUnion = proposedFeatures[0];
+  for (let i = 1; i < proposedFeatures.length; i++) {
+    proposedUnion = turf.union(turf.featureCollection([proposedUnion, proposedFeatures[i]]));
+  }
 
-    // 4. Identify Affected Reference Parcels & Prepare Reference Union
-    const referenceFeatures = referenceParcels.map(p => {
-      const rings = getRings(p);
-      const feature = p.geometry.type === 'MultiPolygon'
-        ? turf.multiPolygon(p.originalCoords)
-        : turf.polygon(rings);
-      feature.properties = { ...feature.properties, id: p.id, name: p.name || p.id };
-      return feature;
-    });
+  // 4. Identify Affected Reference Parcels & Prepare Reference Union
+  const referenceFeatures = referenceParcels.map(p => {
+    const rings = getRings(p);
+    const feature = p.geometry.type === 'MultiPolygon'
+      ? turf.multiPolygon(p.originalCoords)
+      : turf.polygon(rings);
+    feature.properties = { 
+      ...feature.properties, 
+      id: p.id, 
+      name: p.name || p.id,
+      hasCadastralReference: p.hasCadastralReference 
+    };
+    return feature;
+  });
 
-    // Filter reference features to ONLY those that are actually affected (> 1 m² overlap)
-    // This allows for tiny neighbor touches caused by BBox padding.
-    const affectedReferenceFeatures = referenceFeatures.filter(refFeat => {
-      const intersection = turf.intersect(turf.featureCollection([refFeat, proposedUnion]));
-      if (!intersection) return false;
-      const intersectionArea = calculateFeatureArea(intersection);
-      return intersectionArea > SLIVER_AREA_TOLERANCE_SQM;
-    });
+  // Filter reference features to ONLY those that are actually affected (> 1 m² overlap)
+  // This allows for tiny neighbor touches caused by BBox padding.
+  const affectedReferenceFeatures = referenceFeatures.filter(refFeat => {
+    // Ignorar por completo a nivel de cálculo fincas del WFS que no tengan Referencia (Dominio Público/Carreteras)
+    if (refFeat.properties.hasCadastralReference === false) return false;
 
-    if (affectedReferenceFeatures.length === 0) {
-      return { error: 'Las parcelas propuestas no se solapan de forma significativa con ninguna de las parcelas catastrales de referencia cargadas en la zona.' };
-    }
+    const intersection = turf.intersect(turf.featureCollection([refFeat, proposedUnion]));
+    if (!intersection) return false;
+    const intersectionArea = calculateFeatureArea(intersection);
+    return intersectionArea > SLIVER_AREA_TOLERANCE_SQM;
+  });
 
-    let referenceUnion = affectedReferenceFeatures[0];
-    for (let i = 1; i < affectedReferenceFeatures.length; i++) {
-      referenceUnion = turf.union(turf.featureCollection([referenceUnion, affectedReferenceFeatures[i]]));
-    }
-
-    // Modify Unions to extract ONLY exterior perimeters.
-    // turf.union naturally dissolves internal boundaries if polygons share an edge.
-    // Any remaining 'holes' inside the union will still exist, but we mainly care about the outer hull and the solid geometry.
-
-    // 5. Detect Gaps & Encroachments Based on Perimeters
-    // HUECOS: Catastro area not covered by Proposal (Diferencia directa sin buffer)
-    let gaps = turf.difference(turf.featureCollection([referenceUnion, proposedUnion]));
-    let gapArea = gaps ? calculateFeatureArea(gaps) : 0;
-    
-    // SOLAPES: Proposal area falling outside Catastro (Diferencia directa sin buffer)
-    let encroachments = turf.difference(turf.featureCollection([proposedUnion, referenceUnion]));
-    let encroachmentArea = encroachments ? calculateFeatureArea(encroachments) : 0;
-
-    // Evaluate perimeter differences
-    if (gapArea > SLIVER_AREA_TOLERANCE_SQM) {
-      errors.push({ type: 'HUECO', message: `El perímetro exterior deja huecos en la cartografía catastral (${gapArea.toFixed(2)} m²).` });
-      reportGeometries.gaps = gaps;
-    }
-
-    if (encroachmentArea > SLIVER_AREA_TOLERANCE_SQM) {
-      errors.push({ type: 'SOLAPE', message: `El perímetro exterior invade espacio fuera de las parcelas de referencia (${encroachmentArea.toFixed(2)} m²).` });
-      reportGeometries.encroachments = encroachments;
-    }
-
-    // 5.5. Detect Internal Overlaps (Invasiones Internas)
-    // Criterio solicitado: NO se permite superposición de geometrías del propio dibujo del usuario.
+  if (affectedReferenceFeatures.length === 0) {
     if (internalOverlaps.length > 0) {
       const totalInternalOverlapArea = internalOverlaps.reduce((acc, o) => acc + calculateFeatureArea(o), 0);
       if (totalInternalOverlapArea > SLIVER_AREA_TOLERANCE_SQM) {
@@ -142,38 +116,132 @@ export const performIvgaCheck = (proposedParcels, referenceParcels) => {
       }
     }
 
-    // 6. Results Summary
     const totalProposedArea = calculateFeatureArea(proposedUnion);
-    const totalReferenceArea = calculateFeatureArea(referenceUnion);
-
-    // According to Cadastre, a validation is positive if the proposed area is essentially
-    // identical to the affected area, AND there are no gaps/encroachments.
-    const areaDifference = Math.abs(totalProposedArea - totalReferenceArea);
-
-    // Según especificaciones: tolerancia de 1.0 m² (±) para la discrepancia de área
-    const isAreaMatched = areaDifference <= 1.0; 
-
     const isValid = errors.length === 0;
-    const isPositive = isValid && isAreaMatched;
 
     return {
       success: true,
       summary: {
         totalProposedArea,
-        totalReferenceArea,
-        gapArea: gapArea > SLIVER_AREA_TOLERANCE_SQM ? gapArea : 0,
-        encroachmentArea: encroachmentArea > SLIVER_AREA_TOLERANCE_SQM ? encroachmentArea : 0,
+        totalReferenceArea: 0,
+        gapArea: 0,
+        encroachmentArea: 0,
+        publicDomainArea: totalProposedArea,
         isValid,
-        isPositive,
-        errors: errors
+        isPositive: isValid,
+        isPublicDomain: isValid,
+        errors
       },
       geometries: reportGeometries
     };
-
-  } catch (error) {
-    console.error("IVGA Validation Internal Error:", error);
-    return { error: 'Error crítico durante el procesamiento geométrico: ' + error.message };
   }
+
+  let referenceUnion = affectedReferenceFeatures[0];
+  for (let i = 1; i < affectedReferenceFeatures.length; i++) {
+    referenceUnion = turf.union(turf.featureCollection([referenceUnion, affectedReferenceFeatures[i]]));
+  }
+
+  // Modify Unions to extract ONLY exterior perimeters.
+  // turf.union naturally dissolves internal boundaries if polygons share an edge.
+  // Any remaining 'holes' inside the union will still exist, but we mainly care about the outer hull and the solid geometry.
+
+  // 5. Detect Gaps & Encroachments Based on Perimeters
+  // HUECOS: Catastro area not covered by Proposal (Diferencia directa sin buffer)
+  let gaps = turf.difference(turf.featureCollection([referenceUnion, proposedUnion]));
+  let gapArea = gaps ? calculateFeatureArea(gaps) : 0;
+
+  // SOLAPES: Proposal area falling outside Catastro (Diferencia directa sin buffer)
+  let encroachments = turf.difference(turf.featureCollection([proposedUnion, referenceUnion]));
+  let encroachmentArea = encroachments ? calculateFeatureArea(encroachments) : 0;
+
+  // Evaluate perimeter differences
+  if (gapArea > SLIVER_AREA_TOLERANCE_SQM) {
+    errors.push({ type: 'HUECO', message: `El perímetro exterior deja huecos en la cartografía catastral (${gapArea.toFixed(2)} m²).` });
+    reportGeometries.gaps = gaps;
+  }
+
+  // DOMINIO PÚBLICO: Ver si el solape recae en parcelas existentes o en espacio en blanco
+  let publicDomainArea = 0;
+  let thirdPartyInvasionArea = encroachmentArea;
+  if (encroachmentArea > 0) {
+    let publicDomainFeatures = encroachments;
+    for (const refFeat of referenceFeatures) {
+      if (refFeat.properties.hasCadastralReference === false) continue;
+      if (!publicDomainFeatures) break;
+      try {
+        publicDomainFeatures = turf.difference(turf.featureCollection([publicDomainFeatures, refFeat]));
+      } catch (e) { /* Ignorar finca si rompe topología */ }
+    }
+    publicDomainArea = publicDomainFeatures ? calculateFeatureArea(publicDomainFeatures) : 0;
+    thirdPartyInvasionArea = Math.max(0, encroachmentArea - publicDomainArea);
+  }
+
+  if (thirdPartyInvasionArea > SLIVER_AREA_TOLERANCE_SQM) {
+    errors.push({ type: 'SOLAPE_TERCEROS', message: `El perímetro exterior invade terceros fuera de las parcelas de referencia (${thirdPartyInvasionArea.toFixed(2)} m²).` });
+    reportGeometries.encroachments = encroachments;
+  } else if (publicDomainArea > SLIVER_AREA_TOLERANCE_SQM) {
+    // Invasión reportada, pero solo es sobre vía pública (DOMINIO PÚBLICO)
+    reportGeometries.encroachments = encroachments;
+  }
+
+  // 5.5. Detect Internal Overlaps (Invasiones Internas)
+  // Criterio solicitado: NO se permite superposición de geometrías del propio dibujo del usuario.
+  if (internalOverlaps.length > 0) {
+    const totalInternalOverlapArea = internalOverlaps.reduce((acc, o) => acc + calculateFeatureArea(o), 0);
+    if (totalInternalOverlapArea > SLIVER_AREA_TOLERANCE_SQM) {
+      errors.push({
+        type: 'SOLAPE_INTERNO',
+        message: `Existe una INVASIÓN o superposición entre geometrías del propio dibujo (${totalInternalOverlapArea.toFixed(2)} m² superpuestos).`
+      });
+    }
+  }
+
+  // 6. Results Summary
+  const totalProposedArea = calculateFeatureArea(proposedUnion);
+  const totalReferenceArea = calculateFeatureArea(referenceUnion);
+
+  // According to Cadastre, a validation is positive if the proposed area is essentially
+  // identical to the affected area, AND there are no gaps/encroachments.
+  const areaDifference = Math.abs(totalProposedArea - totalReferenceArea);
+
+  // Según especificaciones: tolerancia de 1.0 m² (±) para la discrepancia de área
+  const isAreaMatched = areaDifference <= 1.0;
+
+  const isPurelyPublicDomain = publicDomainArea > (totalProposedArea * 0.95);
+
+  // Ignorar error de HUECO si realmente el dibujo está casi todo en Dominio Público Puro
+  const relevantErrors = errors.filter(e => {
+    if (isPurelyPublicDomain && e.type === 'HUECO') return false;
+    return true;
+  });
+
+  // Es Dominio Público si la invasión solo recae en espacio en blanco
+  const isPublicDomain = publicDomainArea > SLIVER_AREA_TOLERANCE_SQM && thirdPartyInvasionArea <= SLIVER_AREA_TOLERANCE_SQM && relevantErrors.length === 0;
+
+  // Si la única queja fue Dominio Público, entonces el conjunto es positivo
+  const isValid = relevantErrors.length === 0 || isPublicDomain;
+  const isPositive = (isValid && isAreaMatched) || isPublicDomain;
+
+  return {
+    success: true,
+    summary: {
+      totalProposedArea,
+      totalReferenceArea,
+      gapArea: gapArea > SLIVER_AREA_TOLERANCE_SQM ? gapArea : 0,
+      encroachmentArea: encroachmentArea > SLIVER_AREA_TOLERANCE_SQM ? encroachmentArea : 0,
+      publicDomainArea,
+      isValid,
+      isPositive,
+      isPublicDomain,
+      errors: relevantErrors
+    },
+    geometries: reportGeometries
+  };
+
+} catch (error) {
+  console.error("IVGA Validation Internal Error:", error);
+  return { error: 'Error crítico durante el procesamiento geométrico: ' + error.message };
+}
 };
 
 /**

@@ -1027,16 +1027,24 @@ export default function Sidebar({
               </div>
 
               {macroValidationResult && (() => {
+                const isPublicDomain = macroValidationResult.isPublicDomain;
                 const isWarning = macroValidationResult.isValid && macroValidationResult.message.includes('Advertencia');
-                const color = macroValidationResult.isValid ? (isWarning ? '#f59e0b' : '#10b981') : '#ef4444';
-                const bgColor = macroValidationResult.isValid ? (isWarning ? 'rgba(245, 158, 11, 0.05)' : 'rgba(16, 185, 129, 0.05)') : 'rgba(239, 68, 68, 0.05)';
-                const Icon = macroValidationResult.isValid ? (isWarning ? AlertTriangle : ShieldCheck) : ShieldAlert;
+                
+                // Colors: Red for negative, Cyan for Public Domain, Amber for warning, Emerald for positive
+                const color = !macroValidationResult.isValid ? '#ef4444' : 
+                              (isPublicDomain ? '#06b6d4' : (isWarning ? '#f59e0b' : '#10b981'));
+                
+                const bgColor = !macroValidationResult.isValid ? 'rgba(239, 68, 68, 0.05)' : 
+                                (isPublicDomain ? 'rgba(6, 182, 212, 0.05)' : (isWarning ? 'rgba(245, 158, 11, 0.05)' : 'rgba(16, 185, 129, 0.05)'));
+                
+                const Icon = !macroValidationResult.isValid ? ShieldAlert : 
+                             (isPublicDomain ? Info : (isWarning ? AlertTriangle : ShieldCheck));
 
                 return (
-                  <div className="glass-card" style={{ padding: '15px', marginBottom: '16px', background: bgColor, borderLeft: `3px solid ${color}` }}>
-                    <h3 style={{ fontSize: '0.85rem', color: color, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                  <div className="glass-card" style={{ padding: '15px', marginBottom: '16px', background: bgColor, borderLeft: `3px solid ${color}`, borderRadius: '0' }}>
+                    <h3 style={{ fontSize: '0.85rem', color: color, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', fontWeight: '800', letterSpacing: '0.02em' }}>
                       <Icon size={18} />
-                      RESULTADO: {macroValidationResult.isValid ? 'POSITIVO' : 'NEGATIVO'}
+                      RESULTADO: {isPublicDomain ? 'POSITIVO (DOMINIO PÚBLICO)' : (macroValidationResult.isValid ? 'POSITIVO' : 'NEGATIVO')}
                     </h3>
                     <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '10px', lineHeight: '1.4' }}>
                       {macroValidationResult.message}
