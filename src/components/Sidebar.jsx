@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, FileJson, AlertCircle, AlertTriangle, Download, Trash2, Map, Eye, EyeOff, List, Building, Search, Loader2, LifeBuoy, ShieldCheck, ShieldAlert, Shield, Info, MapPin, Calendar, History, ChevronDown, Compass } from 'lucide-react';
+import { UploadCloud, FileJson, AlertCircle, AlertTriangle, Download, Trash2, Map, Eye, EyeOff, List, Building, Search, Loader2, LifeBuoy, ShieldCheck, ShieldAlert, Shield, Info, MapPin, Calendar, History, ChevronDown, Compass, ExternalLink } from 'lucide-react';
 import JSZip from 'jszip';
 import { parseGML } from '../utils/gmlParser';
 import { parseDXF } from '../utils/dxfParser';
@@ -42,6 +42,7 @@ export default function Sidebar({
   stats,
   onIncrementStat,
   onOpenSupportModal,
+  onOpenLinksModal,
   onOpenLegalModal,
   selectedParcelId,
   onSelectParcel,
@@ -908,7 +909,7 @@ export default function Sidebar({
         style={{
           width: '100%',
           marginTop: '-15px',
-          marginBottom: '20px',
+          marginBottom: '8px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -921,6 +922,26 @@ export default function Sidebar({
         }}
       >
         <LifeBuoy size={16} /> SOPORTE TÉCNICO
+      </button>
+
+      <button
+        className="btn btn-secondary links-btn"
+        onClick={onOpenLinksModal}
+        style={{
+          width: '100%',
+          marginBottom: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px',
+          fontSize: '0.75rem',
+          background: 'rgba(52, 211, 153, 0.05)',
+          border: '1px solid rgba(52, 211, 153, 0.2)',
+          color: '#34d399',
+          height: '38px'
+        }}
+      >
+        <ExternalLink size={16} /> ENLACES DE INTERÉS
       </button>
 
 

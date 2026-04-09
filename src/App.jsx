@@ -14,7 +14,7 @@ import BuildingDataModal from './components/BuildingDataModal';
 import SupportModal from './components/SupportModal';
 import LegalModal from './components/LegalModal';
 import ErrorBoundary from './components/ErrorBoundary';
-
+import LinksModal from './components/LinksModal';
 
 function App() {
   const [rawParcels, setRawParcels] = useState([]);
@@ -27,6 +27,7 @@ function App() {
   const [isBuildingModalOpen, setIsBuildingModalOpen] = useState(false);
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
   const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
+  const [isLinksModalOpen, setIsLinksModalOpen] = useState(false);
   const [legalModalType, setLegalModalType] = useState('legal'); 
   const [buildingQueue, setBuildingQueue] = useState([]); // Kept for future or internal use if needed
   const [targetParcelForBuilding, setTargetParcelForBuilding] = useState(null);
@@ -618,6 +619,7 @@ function App() {
         stats={stats}
         onIncrementStat={incrementStat}
         onOpenSupportModal={() => setIsSupportModalOpen(true)}
+        onOpenLinksModal={() => setIsLinksModalOpen(true)}
         onOpenLegalModal={(type) => { setLegalModalType(type); setIsLegalModalOpen(true); }}
         selectedParcelId={selectedParcelId}
         onSelectParcel={handleSelectParcel}
@@ -644,6 +646,10 @@ function App() {
         isOpen={isLegalModalOpen} 
         onClose={() => setIsLegalModalOpen(false)} 
         type={legalModalType} 
+      />
+      <LinksModal
+        isOpen={isLinksModalOpen}
+        onClose={() => setIsLinksModalOpen(false)}
       />
     </div>
   );
