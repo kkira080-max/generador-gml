@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Wrench, Ruler, Square, Crosshair, ChevronLeft, ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
+import { Wrench, Ruler, Square, Crosshair, ChevronLeft, ChevronDown, ChevronRight, ExternalLink, Image } from 'lucide-react';
 
 export default function MapTools({ onToolChange, activeTool, measurements = {}, areaUnit, setAreaUnit, huso, onSearchCoords, onHusoChange }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -289,6 +289,14 @@ export default function MapTools({ onToolChange, activeTool, measurements = {}, 
               >
                 <Square size={18} style={{ marginRight: 8 }} />
                 {activeTool === 'go_to_registradores' ? 'Registradores: Pica mapa' : 'Geoportal Registradores'}
+              </button>
+
+              <button
+                className={`tool-btn-full ${activeTool === 'go_to_ortofotos' ? 'active' : ''}`}
+                onClick={() => handleToolClick('go_to_ortofotos')}
+              >
+                <Image size={18} style={{ marginRight: 8 }} />
+                {activeTool === 'go_to_ortofotos' ? 'Ortofotos: Pica mapa' : 'Descargar Ortofotos (CNIG)'}
               </button>
             </div>
             

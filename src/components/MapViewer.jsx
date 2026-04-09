@@ -57,7 +57,7 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
 
   // Intercept tool changes — alert if HUSO required but not set
   const handleToolChange = (tool) => {
-    if ((tool === 'coordinates' || tool === 'go_to_cadastre' || tool === 'go_to_registradores') && !huso) {
+    if ((tool === 'coordinates' || tool === 'go_to_cadastre' || tool === 'go_to_registradores' || tool === 'go_to_ortofotos') && !huso) {
       if (onHusoRequired) onHusoRequired();
       return;
     }
@@ -260,7 +260,7 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
 
     // Coordinate and Cadastre tool click handler
     const onMapClick = async (e) => {
-      if (activeToolRef.current === 'coordinates' || activeToolRef.current === 'go_to_cadastre' || activeToolRef.current === 'go_to_registradores') {
+      if (activeToolRef.current === 'coordinates' || activeToolRef.current === 'go_to_cadastre' || activeToolRef.current === 'go_to_registradores' || activeToolRef.current === 'go_to_ortofotos') {
         const { lat, lng } = e.latlng;
         const epsgCode = `EPSG:${husoRef.current || '25830'}`;
         try {
@@ -352,6 +352,24 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
                .setContent(popupContent)
                .openOn(initialMap);
              
+             return;
+          }
+
+          if (activeToolRef.current === 'go_to_ortofotos') {
+             if (!husoRef.current) {
+                 if (onHusoRequired) onHusoRequired();
+                 return;
+             }
+             
+             // Usaremos nuestro propio contenedor HTML alojado localmente en la carpeta public
+             // que carga exactamente las mismas librerías oficiales del CNIG y el plugin georefimage2,
+             // pero que nos permite inyectar el zoom al inicializar el mapa sin restricciones.
+             const xWeb = lng * 20037508.34 / 180;
+             let yWeb = Math.log(Math.tan((90 + lat) * Math.PI / 360)) / (Math.PI / 180);
+             yWeb = yWeb * 20037508.34 / 180;
+             
+             const url = `/cnig-ortho.html?x=${xWeb}&y=${yWeb}&zoom=18`;
+             window.open(url, '_blank');
              return;
           }
 

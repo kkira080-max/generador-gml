@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="mapea" content="yes">
+    <title>Visor Ortofotos CNIG (Zoom Automático)</title>
+    <link type="text/css" rel="stylesheet" href="https://componentes.cnig.es/api-core/assets/css/apiign.ol.min.css">
+    <link href="https://componentes.cnig.es/api-core/plugins/georefimage2/georefimage2.ol.min.css" rel="stylesheet" />
+    <link href="https://componentes.cnig.es/api-core/plugins/backimglayer/backimglayer.ol.min.css" rel="stylesheet" />
+    <style type="text/css">
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Inter', Arial, sans-serif;
+            background: #000;
+        }
+        #top-bar {
+            background: rgba(17, 17, 17, 0.95);
+            color: #38bdf8;
+            padding: 10px 15px;
+            font-size: 0.8rem;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(56, 189, 248, 0.2);
+        }
+        #mapjs {
+            height: calc(100% - 39px);
+            width: 100%;
+        }
+        .m-container {
+            background: #222 !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="top-bar">
+        <span>ASISTENTE DE EXTRACCIÓN PNOA - HERRAMIENTA ORIGINAL CNIG</span>
+        <span id="coords-display" style="color: rgba(255,255,255,0.5); font-size: 0.7rem; font-family: monospace;"></span>
+    </div>
+    <div id="mapjs" class="m-container"></div>
+    
+    <!-- Dependencies from the exact CNIG Viewer to ensure "georefimage2" runs impeccably with its scale factor -->
+    <script type="text/javascript" src="https://componentes.cnig.es/api-core/vendor/browser-polyfill.js"></script>
+    <script type="text/javascript" src="https://componentes.cnig.es/api-core/js/apiign.ol.min.js"></script>
+    <script type="text/javascript" src="https://componentes.cnig.es/api-core/js/configuration.js"></script>
+    <script type="text/javascript" src="https://componentes.cnig.es/api-core/plugins/georefimage2/georefimage2.ol.min.js"></script>
+    <script type="text/javascript" src="https://componentes.cnig.es/api-core/plugins/backimglayer/backimglayer.ol.min.js"></script>
+
+    <script type="text/javascript">
+        const urlParams = new URLSearchParams(window.location.search);
+        const xStr = urlParams.get('x');
+        const yStr = urlParams.get('y');
+        const zoomParam = urlParams.get('zoom') || 18;
+        
+        // This coordinates must be received in EPSG:3857 (Web Mercator) to ensure Mapea initializes perfectly centered
+        let centerCoords = [-467062, 4783459]; 
+        
+        if (xStr && yStr) {
+            centerCoords = [parseFloat(xStr), parseFloat(yStr)];
+            document.getElementById('coords-display').innerText = `WEB MERCATOR X: ${parseFloat(xStr).toFixed(2)} Y: ${parseFloat(yStr).toFixed(2)}`;
+        }
+
+        M.language.setLang('es');
+
+        const map = M.map({
+            container: 'mapjs',
+            zoom: parseInt(zoomParam),
+            maxZoom: 20,
+            minZoom: 4,
+            center: centerCoords,
+        });
+
+        // The specific CNIG tool the user requested
+        const mp = new M.plugin.Georefimage2({
+            collapsed: false,
+            collapsible: true,
+            position: 'TL'
+        });
+        map.addPlugin(mp);
+
+        // Required BackImgLayer from CNIG exactly as their JSP uses it
+        map.addPlugin(new M.plugin.BackImgLayer({
+          position: 'TR',
+          layerId: 1, 
+          layerVisibility: true,
+          collapsed: true,
+          collapsible: true,
+          columnsNumber: 2,
+          empty: true,
+          layerOpts: [
+            {
+              id: 'raster',
+              preview: 'https://componentes.cnig.es/api-core/img/raster.png',
+              title: 'Mapa',
+              layers: [
+                new M.layer.WMTS({
+                  url: 'https://www.ign.es/wmts/mapa-raster?',
+                  name: 'MTN',
+                  legend: 'Mapa',
+                  matrixSet: 'GoogleMapsCompatible',
+                  transparent: false,
+                  displayInLayerSwitcher: false,
+                  queryable: false,
+                  visible: true,
+                  format: 'image/jpeg',
+                }),
+              ],
+            },
+            {
+              id: 'imagen',
+              preview: 'https://componentes.cnig.es/api-core/img/image.png',
+              title: 'Ortofoto PNOA',
+              layers: [
+                new M.layer.XYZ({
+                  url: 'https://tms-pnoa-ma.idee.es/1.0.0/pnoa-ma/{z}/{x}/{-y}.jpeg',
+                  name: 'PNOA-MA',
+                  legend: 'Imagen',
+                  projection: 'EPSG:3857',
+                  transparent: false,
+                  displayInLayerSwitcher: false,
+                  queryable: false,
+                  visible: true,
+                  maxZoom: 19,
+                })
+              ],
+            }
+          ]
+        }));
+    </script>
+</body>
+</html>
