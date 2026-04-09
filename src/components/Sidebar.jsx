@@ -41,9 +41,8 @@ export default function Sidebar({
   onFlyToLocation,
   stats,
   onIncrementStat,
-  onOpenLegalModal,
   onOpenSupportModal,
-  onOpenLinks,
+  onOpenLegalModal,
   selectedParcelId,
   onSelectParcel,
   isHistoricalLayerActive,
@@ -511,6 +510,60 @@ export default function Sidebar({
       a.download = `${p.name || "parcela"}.kmz`;
       a.click();
       URL.revokeObjectURL(url);
+    } else if (format === 'gml') {
+      const isDxf = p.filename && p.filename.toLowerCase().endsWith('.dxf');
+      if (isDxf && !huso) {
+        setErrorMsg('Error: Has cargado un fichero DXF. Es obligatorio seleccionar el Sistema de Referencia (HUSO) manualmente antes de generar.');
+        return;
+      }
+      
+      const missingHuso = !p.huso;
+      if (!huso && missingHuso) {
+        setErrorMsg('Error: Parcela sin HUSO detectado. Selecciona un HUSO (EPSG) antes de generar.');
+        return;
+      }
+
+      const hasOpenRings = (rings) => {
+        if (!rings || !Array.isArray(rings)) return true;
+        return rings.some(ring => {
+          if (!ring || ring.length < 4) return true;
+          const first = ring[0];
+          const last = ring[ring.length - 1];
+          return Math.abs(first[0] - last[0]) > 0.001 || Math.abs(first[1] - last[1]) > 0.001;
+        });
+      };
+
+      if (hasOpenRings(p.originalCoords || [])) {
+        setErrorMsg(`Error de geometría: La parcela no está cerrada (polilíneas abiertas).`);
+        return;
+      }
+
+      // Generate a sequence name if necessary to mimic handleGenerateGML logic
+      const pToExport = { ...p };
+      let safeName = pToExport.name ? pToExport.name.trim() : '';
+      if (!safeName || safeName.toLowerCase() === 'desconocido' || safeName.toLowerCase().startsWith('parcela ')) {
+        pToExport.name = 'parcela_1a'; // As fallback when doing single download
+      }
+      pToExport.name = pToExport.name.replace(/[<>:"/\\|?*]+/g, '_');
+
+      content = generateGMLv4([pToExport], huso);
+      if (!content) return;
+      
+      mimeType = 'application/xml;charset=utf-8;';
+      extension = 'gml';
+      
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      
+      let outName = pToExport.name || "parcela";
+      if (outName.toLowerCase().endsWith('.gml')) outName = outName.substring(0, outName.length - 4);
+      if (outName.toLowerCase().endsWith('.dxf')) outName = outName.substring(0, outName.length - 4);
+      
+      a.download = `${outName}.${extension}`;
+      a.click();
+      URL.revokeObjectURL(url);
     }
 
     onIncrementStat('downloads');
@@ -582,15 +635,7 @@ export default function Sidebar({
           onDragOver={handleDrag}
           onDrop={handleDrop}
           onClick={() => document.getElementById('file-upload').click()}
-          style={{ 
-            borderRadius: '0', 
-            background: 'rgba(0,0,0,0.2)', 
-            padding: '40px 20px', 
-            minHeight: '120px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
+          style={{ borderRadius: '0', background: 'rgba(0,0,0,0.2)', padding: '20px' }}
         >
           <div style={{ textAlign: 'center' }}>
             <p style={{ margin: 0, fontSize: '0.8rem' }}>Arrastra ficheros .gml o .dxf, o haz clic aquí</p>
@@ -803,21 +848,20 @@ export default function Sidebar({
 
 
         {showHusoAlert && (
-          <div ref={husoAlertRef} className="animate-pulse-border" style={{
-            background: 'rgba(251, 191, 36, 0.15)',
-            border: '2px solid var(--accent-warning)',
-            padding: '12px',
+          <div ref={husoAlertRef} className="animate-pulse" style={{
+            background: 'rgba(239, 68, 68, 0.15)',
+            border: '1px solid var(--accent-danger)',
+            padding: '10px',
             marginBottom: '12px',
-            borderRadius: '0',
-            color: 'var(--accent-warning)',
+            borderRadius: '4px',
+            color: 'var(--accent-danger)',
             fontSize: '0.75rem',
-            fontWeight: 800,
+            fontWeight: 700,
             display: 'flex',
             alignItems: 'center',
-            gap: 10,
-            boxShadow: '0 0 15px rgba(251, 191, 36, 0.2)'
+            gap: 8
           }}>
-            <AlertCircle size={18} /> ⚠️ SISTEMA DE REFERENCIA OBLIGATORIO PARA MEDICIÓN
+            <AlertCircle size={16} /> ⚠️ SELECCIONA EL HUSO CORRESPONDIENTE
           </div>
         )}
 
@@ -1027,24 +1071,16 @@ export default function Sidebar({
               </div>
 
               {macroValidationResult && (() => {
-                const isPublicDomain = macroValidationResult.isPublicDomain;
                 const isWarning = macroValidationResult.isValid && macroValidationResult.message.includes('Advertencia');
-                
-                // Colors: Red for negative, Cyan for Public Domain, Amber for warning, Emerald for positive
-                const color = !macroValidationResult.isValid ? '#ef4444' : 
-                              (isPublicDomain ? '#06b6d4' : (isWarning ? '#f59e0b' : '#10b981'));
-                
-                const bgColor = !macroValidationResult.isValid ? 'rgba(239, 68, 68, 0.05)' : 
-                                (isPublicDomain ? 'rgba(6, 182, 212, 0.05)' : (isWarning ? 'rgba(245, 158, 11, 0.05)' : 'rgba(16, 185, 129, 0.05)'));
-                
-                const Icon = !macroValidationResult.isValid ? ShieldAlert : 
-                             (isPublicDomain ? Info : (isWarning ? AlertTriangle : ShieldCheck));
+                const color = macroValidationResult.isValid ? (isWarning ? '#f59e0b' : '#10b981') : '#ef4444';
+                const bgColor = macroValidationResult.isValid ? (isWarning ? 'rgba(245, 158, 11, 0.05)' : 'rgba(16, 185, 129, 0.05)') : 'rgba(239, 68, 68, 0.05)';
+                const Icon = macroValidationResult.isValid ? (isWarning ? AlertTriangle : ShieldCheck) : ShieldAlert;
 
                 return (
-                  <div className="glass-card" style={{ padding: '15px', marginBottom: '16px', background: bgColor, borderLeft: `3px solid ${color}`, borderRadius: '0' }}>
-                    <h3 style={{ fontSize: '0.85rem', color: color, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', fontWeight: '800', letterSpacing: '0.02em' }}>
+                  <div className="glass-card" style={{ padding: '15px', marginBottom: '16px', background: bgColor, borderLeft: `3px solid ${color}` }}>
+                    <h3 style={{ fontSize: '0.85rem', color: color, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
                       <Icon size={18} />
-                      RESULTADO: {isPublicDomain ? 'POSITIVO (DOMINIO PÚBLICO)' : (macroValidationResult.isValid ? 'POSITIVO' : 'NEGATIVO')}
+                      RESULTADO: {macroValidationResult.isValid ? 'POSITIVO' : 'NEGATIVO'}
                     </h3>
                     <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '10px', lineHeight: '1.4' }}>
                       {macroValidationResult.message}
@@ -1316,6 +1352,14 @@ export default function Sidebar({
                             >
                               <Download size={12} /> .KML
                             </button>
+                            <button
+                              className="btn-tiny"
+                              onClick={() => handleExportSingle(p, 'gml')}
+                              title="Descargar GML"
+                              style={{ color: '#38bdf8' }}
+                            >
+                              <Download size={12} /> .GML
+                            </button>
                           </div>
 
                           <table className="coords-table">
@@ -1402,14 +1446,6 @@ export default function Sidebar({
             onMouseOut={(e) => e.target.style.color = 'var(--text-secondary)'}
           >
             Cookies
-          </span>
-          <span
-            onClick={onOpenLinks}
-            style={{ cursor: 'pointer', transition: 'color 0.2s', color: 'var(--accent-primary)', fontWeight: 'bold' }}
-            onMouseOver={(e) => e.target.style.textDecoration = 'underline'}
-            onMouseOut={(e) => e.target.style.textDecoration = 'none'}
-          >
-            Enlaces de Interés
           </span>
           <span
             onClick={onOpenSupportModal}

@@ -13,7 +13,6 @@ import { supabase } from './utils/supabaseClient';
 import BuildingDataModal from './components/BuildingDataModal';
 import SupportModal from './components/SupportModal';
 import LegalModal from './components/LegalModal';
-import LinksModal from './components/LinksModal'; 
 import ErrorBoundary from './components/ErrorBoundary';
 
 
@@ -28,7 +27,6 @@ function App() {
   const [isBuildingModalOpen, setIsBuildingModalOpen] = useState(false);
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
   const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
-  const [isLinksModalOpen, setIsLinksModalOpen] = useState(false);
   const [legalModalType, setLegalModalType] = useState('legal'); 
   const [buildingQueue, setBuildingQueue] = useState([]); // Kept for future or internal use if needed
   const [targetParcelForBuilding, setTargetParcelForBuilding] = useState(null);
@@ -568,24 +566,6 @@ function App() {
     }
   };
 
-  const handleSearchCoords = ({ x, y, huso: searchHuso }) => {
-    try {
-      // Transform UTM coordinate to WGS84
-      const coordsWGS = transformToWGS84([[x, y]], searchHuso);
-      if (coordsWGS && coordsWGS.length > 0) {
-        setFlyToTarget({ 
-          lat: coordsWGS[0][1], 
-          lng: coordsWGS[0][0], 
-          label: `UTM (${searchHuso}): ${x}, ${y}` 
-        });
-        incrementStat('searches');
-      }
-    } catch (err) {
-      console.error("Coordinate search failed", err);
-      alert("Error al localizar las coordenadas. Verifica el Huso (EPSG).");
-    }
-  };
-
 
   return (
     <div className="app-container">
@@ -607,8 +587,6 @@ function App() {
           areaUnit={areaUnit}
           setAreaUnit={setAreaUnit}
           onHusoRequired={() => { setHusoAlertCounter(c => c + 1); }}
-          onSearchCoords={handleSearchCoords}
-          onHusoChange={setHuso}
         />
         </ErrorBoundary>
       </div>
@@ -641,7 +619,6 @@ function App() {
         onIncrementStat={incrementStat}
         onOpenSupportModal={() => setIsSupportModalOpen(true)}
         onOpenLegalModal={(type) => { setLegalModalType(type); setIsLegalModalOpen(true); }}
-        onOpenLinks={() => setIsLinksModalOpen(true)}
         selectedParcelId={selectedParcelId}
         onSelectParcel={handleSelectParcel}
         setIsHistoricalLayerActive={setIsHistoricalLayerActive}
@@ -663,15 +640,11 @@ function App() {
         isOpen={isSupportModalOpen} 
         onClose={() => setIsSupportModalOpen(false)} 
       />
-        <LegalModal 
-          isOpen={isLegalModalOpen} 
-          onClose={() => setIsLegalModalOpen(false)} 
-          type={legalModalType} 
-        />
-        <LinksModal 
-          isOpen={isLinksModalOpen} 
-          onClose={() => setIsLinksModalOpen(false)} 
-        />
+      <LegalModal 
+        isOpen={isLegalModalOpen} 
+        onClose={() => setIsLegalModalOpen(false)} 
+        type={legalModalType} 
+      />
     </div>
   );
 }
