@@ -437,6 +437,79 @@ export default function Sidebar({
     onIncrementStat('conversions');
   };
 
+  const handleGenerateCombinedGML = async () => {
+    const visibleParcels = parcels.filter(p => visibleParcelIds.has(p.id));
+    if (visibleParcels.length === 0) {
+      setErrorMsg('Error: No hay parcelas visibles para exportar.');
+      return;
+    }
+
+    const hasGmlV4Parcels = visibleParcels.some(p => p.isGmlV4);
+    if (hasGmlV4Parcels) {
+      setErrorMsg('Error: Hay ficheros GML v4 cargados. Ya están en el formato final, no se permite regenerarlos.');
+      return;
+    }
+
+    const hasDxfParcels = visibleParcels.some(p => p.filename && p.filename.toLowerCase().endsWith('.dxf'));
+    if (hasDxfParcels && !huso) {
+      setErrorMsg('Error: Has cargado un fichero DXF. Es obligatorio seleccionar el Sistema de Referencia (HUSO) manualmente antes de generar.');
+      return;
+    }
+
+    const hasOpenRings = (rings) => {
+      if (!rings || !Array.isArray(rings)) return true;
+      return rings.some(ring => {
+        if (!ring || ring.length < 4) return true;
+        const first = ring[0];
+        const last = ring[ring.length - 1];
+        return Math.abs(first[0] - last[0]) > 0.001 || Math.abs(first[1] - last[1]) > 0.001;
+      });
+    };
+
+    const parcelsWithOpenRings = visibleParcels.filter(p => hasOpenRings(p.originalCoords || []));
+    if (parcelsWithOpenRings.length > 0) {
+      const names = parcelsWithOpenRings.map(p => p.name).join(', ');
+      setErrorMsg(`Error de geometría: Las siguientes parcelas no están cerradas (polilíneas abiertas): ${names}. Todos los recintos deben estar cerrados para generar el GML.`);
+      return;
+    }
+
+    const missingHuso = visibleParcels.some(p => !p.huso);
+    if (!huso && missingHuso) {
+      setErrorMsg('Error: Parcela sin HUSO detectado. Selecciona un HUSO (EPSG) antes de generar.');
+      return;
+    }
+
+    const getSequenceName = (index) => {
+      const num = Math.floor(index / 26) + 1;
+      const letter = String.fromCharCode(65 + (index % 26));
+      return `${num}${letter}`;
+    };
+
+    let anonymousCounter = 0;
+    const pList = visibleParcels.map((parcel) => {
+      const p = { ...parcel };
+      let safeName = p.name ? p.name.trim() : '';
+      if (!safeName || safeName.toLowerCase() === 'desconocido' || safeName.toLowerCase().startsWith('parcela ')) {
+        p.name = getSequenceName(anonymousCounter);
+        anonymousCounter++;
+      }
+      p.name = p.name.replace(/[<>:"/\\|?*]+/g, '_');
+      return p;
+    });
+
+    const xmlString = generateGMLv4(pList, huso);
+    if (xmlString) {
+      const blob = new Blob([xmlString], { type: 'application/xml;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `parcelas_unificadas_${Date.now()}.gml`;
+      a.click();
+      URL.revokeObjectURL(url);
+      onIncrementStat('conversions');
+    }
+  };
+
   const handleDownloadCoords = (p, format) => {
     const rings = p.originalCoords || [];
     let content = "";
@@ -517,7 +590,7 @@ export default function Sidebar({
         setErrorMsg('Error: Has cargado un fichero DXF. Es obligatorio seleccionar el Sistema de Referencia (HUSO) manualmente antes de generar.');
         return;
       }
-      
+
       const missingHuso = !p.huso;
       if (!huso && missingHuso) {
         setErrorMsg('Error: Parcela sin HUSO detectado. Selecciona un HUSO (EPSG) antes de generar.');
@@ -549,19 +622,19 @@ export default function Sidebar({
 
       content = generateGMLv4([pToExport], huso);
       if (!content) return;
-      
+
       mimeType = 'application/xml;charset=utf-8;';
       extension = 'gml';
-      
+
       const blob = new Blob([content], { type: mimeType });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      
+
       let outName = pToExport.name || "parcela";
       if (outName.toLowerCase().endsWith('.gml')) outName = outName.substring(0, outName.length - 4);
       if (outName.toLowerCase().endsWith('.dxf')) outName = outName.substring(0, outName.length - 4);
-      
+
       a.download = `${outName}.${extension}`;
       a.click();
       URL.revokeObjectURL(url);
@@ -700,9 +773,9 @@ export default function Sidebar({
       {/* 4. Cartografía Histórica */}
       <div className="form-group glass-card" style={{ marginBottom: '12px', padding: '14px', border: '1px solid rgba(255,255,255,0.05)' }}>
         <div className="historical-cadastre-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div 
-            className="header-left" 
-            onClick={() => setExpandedHist(!expandedHist)} 
+          <div
+            className="header-left"
+            onClick={() => setExpandedHist(!expandedHist)}
             style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}
           >
             <History size={13} style={{ color: 'var(--accent-primary)' }} />
@@ -716,7 +789,7 @@ export default function Sidebar({
               padding: '2px',
               borderRadius: '0'
             }}>
-              <button 
+              <button
                 type="button"
                 onClick={() => {
                   setIsHistoricalLayerActive(false);
@@ -736,7 +809,7 @@ export default function Sidebar({
               >
                 ACTUAL
               </button>
-              <button 
+              <button
                 type="button"
                 onClick={() => {
                   setIsHistoricalLayerActive(true);
@@ -761,10 +834,10 @@ export default function Sidebar({
         </div>
 
         {expandedHist && (
-          <div className="animate-unfold" style={{ 
-            display: 'flex', 
-            flexDirection: 'column', 
-            gap: '8px', 
+          <div className="animate-unfold" style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
             marginTop: '12px',
             padding: '12px',
             background: 'rgba(24, 24, 27, 0.4)',
@@ -800,12 +873,12 @@ export default function Sidebar({
                 <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: '600' }}>OPACIDAD</span>
                 <span style={{ fontSize: '0.65rem', color: 'var(--accent-primary)', fontWeight: '700' }}>{Math.round(historicalOpacity * 100)}%</span>
               </div>
-              <input 
-                type="range" 
-                min="0" 
-                max="1" 
-                step="0.05" 
-                value={historicalOpacity} 
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={historicalOpacity}
                 onChange={(e) => setHistoricalOpacity(parseFloat(e.target.value))}
                 style={{
                   width: '100%',
@@ -867,12 +940,12 @@ export default function Sidebar({
         )}
 
 
-        <select id="huso" value={huso} onChange={(e) => { 
+        <select id="huso" value={huso} onChange={(e) => {
           const selectedHuso = e.target.value;
-          setHuso(selectedHuso); 
-          setErrorMsg(''); 
-          setShowHusoAlert(false); 
-          
+          setHuso(selectedHuso);
+          setErrorMsg('');
+          setShowHusoAlert(false);
+
           // Si había ficheros pendientes de procesar (esperando el Huso), relanzar el proceso
           if (selectedHuso && pendingFiles) {
             processFiles(pendingFiles, selectedHuso);
@@ -1426,9 +1499,14 @@ export default function Sidebar({
               Exportar a DXF
             </button>
 
-            <button className="btn btn-primary" onClick={handleGenerateGML}>
+            <button className="btn btn-primary" style={{ marginBottom: '8px' }} onClick={handleGenerateGML}>
               <Download size={18} />
-              Generar GML v4
+              Generar GML (gml por cada parcela)
+            </button>
+
+            <button className="btn btn-primary" style={{ background: 'linear-gradient(45deg, #10b981, #059669)', border: 'none', boxShadow: '0 4px 15px rgba(16, 185, 129, 0.2)' }} onClick={handleGenerateCombinedGML}>
+              <Download size={18} />
+              Unir y Generar 1 Único GML
             </button>
           </>
         );
