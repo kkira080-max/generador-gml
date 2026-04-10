@@ -15,6 +15,7 @@ import SupportModal from './components/SupportModal';
 import LegalModal from './components/LegalModal';
 import ErrorBoundary from './components/ErrorBoundary';
 import LinksModal from './components/LinksModal';
+import CramerModal from './components/CramerModal';
 
 function App() {
   const [rawParcels, setRawParcels] = useState([]);
@@ -29,6 +30,7 @@ function App() {
   const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
   const [isLinksModalOpen, setIsLinksModalOpen] = useState(false);
   const [legalModalType, setLegalModalType] = useState('legal'); 
+  const [isCramerModalOpen, setIsCramerModalOpen] = useState(false);
   const [buildingQueue, setBuildingQueue] = useState([]); // Kept for future or internal use if needed
   const [targetParcelForBuilding, setTargetParcelForBuilding] = useState(null);
   const [isProcessingCadastre, setIsProcessingCadastre] = useState(false);
@@ -630,6 +632,7 @@ function App() {
         setHistoricalOpacity={setHistoricalOpacity}
         husoAlertCounter={husoAlertCounter}
         onHusoRequired={() => { setHusoAlertCounter(c => c + 1); }}
+        onOpenCramerModal={() => setIsCramerModalOpen(true)}
       />
       <BuildingDataModal 
         isOpen={isBuildingModalOpen} 
@@ -650,6 +653,16 @@ function App() {
       <LinksModal
         isOpen={isLinksModalOpen}
         onClose={() => setIsLinksModalOpen(false)}
+      />
+      <CramerModal
+        isOpen={isCramerModalOpen}
+        onClose={() => setIsCramerModalOpen(false)}
+        parcels={displayParcels}
+        huso={huso}
+        onAddParcel={(newP) => {
+           setRawParcels(prev => [...prev, newP]);
+           setVisibleParcelIds(prev => new Set([...prev, newP.id]));
+        }}
       />
     </div>
   );
