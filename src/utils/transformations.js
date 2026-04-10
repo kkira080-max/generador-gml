@@ -1,6 +1,5 @@
 import * as turf from '@turf/turf';
 import { calculateCentroid, calculatePolygonArea, closeRing, roundRings } from './geoUtils';
-import polygonClipping from 'polygon-clipping';
 
 /**
  * Funciones de cálculo matricial necesarias para el "Método de la Matriz Inversa"
