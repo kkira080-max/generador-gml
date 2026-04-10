@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, FileJson, AlertCircle, AlertTriangle, Download, Trash2, Map, Eye, EyeOff, List, Building, Search, Loader2, LifeBuoy, ShieldCheck, ShieldAlert, Shield, Info, MapPin, Calendar, History, ChevronDown, Compass, ExternalLink } from 'lucide-react';
+import { UploadCloud, FileJson, AlertCircle, AlertTriangle, Download, Trash2, Map, Eye, EyeOff, List, Building, Search, Loader2, LifeBuoy, ShieldCheck, ShieldAlert, Shield, Info, MapPin, Calendar, History, ChevronDown, Compass, ExternalLink, Move } from 'lucide-react';
 import JSZip from 'jszip';
 import { parseGML } from '../utils/gmlParser';
 import { parseDXF } from '../utils/dxfParser';
@@ -53,7 +53,8 @@ export default function Sidebar({
   historicalOpacity,
   setHistoricalOpacity,
   onHusoRequired,
-  husoAlertCounter
+  husoAlertCounter,
+  onOpenCramerModal
 }) {
 
   const [dragActive, setDragActive] = useState(false);
@@ -1161,6 +1162,27 @@ export default function Sidebar({
                 >
                   {isIcncValidating ? <Loader2 className="animate-spin" size={18} /> : <Building size={18} />}
                   {isIcncValidating ? 'VALIDANDO...' : 'PRE-VALIDACIÓN ICUC (CONSTRUCCIONES)'}
+                </button>
+
+                <button
+                  onClick={onOpenCramerModal}
+                  className="btn btn-secondary"
+                  style={{
+                    width: '100%',
+                    marginTop: '10px',
+                    padding: '10px 15px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    fontSize: '0.8rem',
+                    background: 'rgba(245, 158, 11, 0.1)',
+                    border: '1px solid rgba(245, 158, 11, 0.3)',
+                    color: '#f59e0b'
+                  }}
+                >
+                  <Move size={18} />
+                  AJUSTE GEOMÉTRICO (MATRIZ INVERSA)
                 </button>
               </div>
 
