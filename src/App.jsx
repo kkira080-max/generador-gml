@@ -16,6 +16,9 @@ import LegalModal from './components/LegalModal';
 import ErrorBoundary from './components/ErrorBoundary';
 import LinksModal from './components/LinksModal';
 import CramerModal from './components/CramerModal';
+import Toast from './components/Toast';
+import { showToast } from './utils/toast';
+import proj4 from 'proj4';
 
 function App() {
   const [rawParcels, setRawParcels] = useState([]);
@@ -590,6 +593,16 @@ function App() {
           areaUnit={areaUnit}
           setAreaUnit={setAreaUnit}
           onHusoRequired={() => { setHusoAlertCounter(c => c + 1); }}
+          onHusoChange={setHuso}
+          onSearchCoords={(coords) => {
+             const epsgCode = `EPSG:${coords.huso}`;
+             try {
+                const wgs = proj4(epsgCode, 'EPSG:4326', [coords.x, coords.y]);
+                setFlyToTarget({ lat: wgs[1], lng: wgs[0], label: `X: ${coords.x} • Y: ${coords.y}` });
+             } catch (e) {
+                showToast("Coordenadas UTM no válidas.", "error");
+             }
+          }}
         />
         </ErrorBoundary>
       </div>
@@ -664,6 +677,7 @@ function App() {
            setVisibleParcelIds(prev => new Set([...prev, newP.id]));
         }}
       />
+      <Toast />
     </div>
   );
 }

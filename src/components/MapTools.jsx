@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Wrench, Ruler, Square, Crosshair, ChevronLeft, ChevronDown, ChevronRight, ExternalLink, Image } from 'lucide-react';
+import { showToast } from '../utils/toast';
 
 export default function MapTools({ onToolChange, activeTool, measurements = {}, areaUnit, setAreaUnit, huso, onSearchCoords, onHusoChange }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -42,12 +43,12 @@ export default function MapTools({ onToolChange, activeTool, measurements = {}, 
 
   const handleSearch = () => {
     if (!searchX || !searchY) {
-      alert("Introduce las coordenadas X e Y.");
+      showToast("Introduce las coordenadas X e Y.", "error");
       return;
     }
     const targetHuso = huso;
     if (!targetHuso) {
-      alert("Selecciona el Huso (EPSG) en el desplegable.");
+      showToast("Selecciona el Huso (EPSG) en el desplegable.", "error");
       return;
     }
     onSearchCoords({

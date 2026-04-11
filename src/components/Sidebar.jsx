@@ -1182,7 +1182,7 @@ export default function Sidebar({
                   }}
                 >
                   <Move size={18} />
-                  AJUSTE GEOMÉTRICO (MATRIZ INVERSA)
+                  AJUSTE GEOMÉTRICO
                 </button>
               </div>
 

@@ -9,6 +9,7 @@ import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 import { calculatePolygonArea, calculatePerimeter, transformFromWGS84, closeRing } from '../utils/geoUtils';
 import { fetchRcByCoordinates } from '../utils/cadastreService';
+import { showToast } from '../utils/toast';
 import * as turf from '@turf/turf';
 import MapTools from './MapTools';
 
@@ -281,7 +282,7 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
                  const url = `https://www1.sedecatastro.gob.es/Cartografia/mapa.aspx?refcat=${rc}`;
                  window.open(url, '_blank');
              } else {
-                 alert("No se ha detectado ninguna parcela del Catastro en las coordenadas indicadas. Intenta hacer clic un poco más al interior de la parcela.");
+                 showToast("No se ha detectado ninguna parcela del Catastro en las coordenadas indicadas. Intenta hacer clic un poco más al interior de la parcela.", "error");
              }
              return;
           }

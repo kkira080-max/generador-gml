@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Download } from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { calculateHelmertParameters, findBestCadastreFit, applyHelmertTransformation } from '../utils/transformations';
 import { calculateBbox, calculatePolygonArea, closeRing, transformToWGS84, calculateCentroid } from '../utils/geoUtils';
 import { fetchParcelsByBbox } from '../utils/cadastreService';
@@ -8,11 +10,19 @@ export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParce
   const [activeTab, setActiveTab] = useState(1);
   const [selectedRealMapId, setSelectedRealMapId] = useState('');
   const [selectedAdaptedId, setSelectedAdaptedId] = useState('');
-  
-  // States
-  const [isProcessing, setIsProcessing] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [results, setResults] = useState(null);
+  const [params3P, setParams3P] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // Evita pintar valores como -0.000000000
+  const formatZero = (val, dec) => {
+    if (typeof val !== 'number') return val;
+    const str = val.toFixed(dec);
+    // Si la cadena es idéntica a -0.000... retorna 0.000...
+    if (str.match(/^-0\.0+$/)) return str.substring(1);
+    return str;
+  };
 
   if (!isOpen) return null;
 
@@ -23,6 +33,7 @@ export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParce
   const resetState = () => {
     setErrorMsg('');
     setResults(null);
+    setParams3P(null);
   };
 
   const handleRunOption1 = async () => {
@@ -44,7 +55,7 @@ export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParce
       // We will expand bbox slightly to make sure we grab the neighbor they overlap with.
       const buffer = 50;
       bbox[0] -= buffer; bbox[1] -= buffer; bbox[2] += buffer; bbox[3] += buffer;
-      
+
       let cadastreParcels = parcels.filter(p => p.isCadastre);
       if (cadastreParcels.length === 0) {
         cadastreParcels = await fetchParcelsByBbox(bbox, huso);
@@ -68,31 +79,31 @@ export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParce
       let closestCadastre = null;
       let minDist = Infinity;
       cadastreParcels.forEach(cp => {
-         try {
-           if (!cp || !cp.originalCoords || cp.originalCoords.length === 0) return; // Obviar zonas en blanco o geometrías nulas
-           const cpRing = getOuterRing(cp.originalCoords);
-           if (!cpRing) return;
-           const cpCentroid = calculateCentroid(cpRing);
-           const dist = Math.sqrt(Math.pow(origCentroid[0] - cpCentroid[0], 2) + Math.pow(origCentroid[1] - cpCentroid[1], 2));
-           if (dist < minDist) {
-             minDist = dist;
-             closestCadastre = cp;
-           }
-         } catch (err) {
-           // Ignorar silenciosamente las parcelas mal formadas de catastro
-         }
+        try {
+          if (!cp || !cp.originalCoords || cp.originalCoords.length === 0) return; // Obviar zonas en blanco o geometrías nulas
+          const cpRing = getOuterRing(cp.originalCoords);
+          if (!cpRing) return;
+          const cpCentroid = calculateCentroid(cpRing);
+          const dist = Math.sqrt(Math.pow(origCentroid[0] - cpCentroid[0], 2) + Math.pow(origCentroid[1] - cpCentroid[1], 2));
+          if (dist < minDist) {
+            minDist = dist;
+            closestCadastre = cp;
+          }
+        } catch (err) {
+          // Ignorar silenciosamente las parcelas mal formadas de catastro
+        }
       });
 
       if (!closestCadastre) throw new Error("No se pudo identificar una parcela oficial cercana.");
 
       // Run iterative fit
       const fit = findBestCadastreFit(realParcel.originalCoords, closestCadastre.originalCoords);
-      
+
       setResults(fit);
 
       // Create new adapted geometry
       const newCoords = applyHelmertTransformation(realParcel.originalCoords, fit);
-      
+
       // Convert back to WGS84 for mapping
       let wgs84Coords;
       if (realParcel.geometry.type === 'MultiPolygon') {
@@ -107,7 +118,7 @@ export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParce
       };
 
       const newArea = calculatePolygonArea(newCoords[0]);
-      
+
       const adaptedName = `${realParcel.name} (ADAPTADA)`;
       onAddParcel({
         id: `adapted-${Date.now()}`,
@@ -127,75 +138,227 @@ export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParce
     }
   };
 
-  const handleRunOption2 = () => {
+  const handleRunOption2 = (downloadPdf = false) => {
     resetState();
-    if (!realParcel || !adaptedParcel) {
+
+    if (!selectedRealMapId || !selectedAdaptedId) {
       setErrorMsg("Debes seleccionar ambas parcelas: la original (realidad física) y la adaptada.");
       return;
     }
 
-    // Pass the first ring of both for parameter calculation
-    const result = calculateHelmertParameters(realParcel.originalCoords[0], adaptedParcel.originalCoords[0]);
+    const getOuterRing = (coords) => {
+      if (!coords || !coords[0]) return null;
+      if (typeof coords[0][0] === 'number') return coords;
+      if (typeof coords[0][0][0] === 'number') return coords[0];
+      if (typeof coords[0][0][0][0] === 'number') return coords[0][0];
+      return coords;
+    };
 
-    if (result.errorMsg) {
-      setErrorMsg(result.errorMsg);
-    } else {
-      setResults(result);
+    const ring1 = getOuterRing(realParcel?.originalCoords);
+    const ring2 = getOuterRing(adaptedParcel?.originalCoords);
+
+    if (!ring1 || !ring2 || ring1.length !== ring2.length || ring1.length < 3) {
+      setErrorMsg("Ambas parcelas deben tener exactamente el mismo número y orden de vértices.");
+      return;
     }
-  };
 
-  const handleDownloadCSV = () => {
-    if (!results) return;
+    const n = ring1.length;
+    let idx1 = 0;
+    let idx2 = Math.floor(n / 3);
+    let idx3 = Math.floor(2 * n / 3);
 
-    const csvContent = 
-`PARAMETROS DE DESPLAZAMIENTO CATASTRO;
-AX;${results.a.toFixed(9).replace('.', ',')}
-BX;${(-results.b).toFixed(9).replace('.', ',')}
-CX;${results.Tx.toFixed(3).replace('.', ',')}
-AY;${results.b.toFixed(9).replace('.', ',')}
-BY;${results.a.toFixed(9).replace('.', ',')}
-CY;${results.Ty.toFixed(3).replace('.', ',')}`;
+    const x1 = ring1[idx1][0]; const y1 = ring1[idx1][1];
+    const x2 = ring1[idx2][0]; const y2 = ring1[idx2][1];
+    const x3 = ring1[idx3][0]; const y3 = ring1[idx3][1];
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `parametros_matriz_inversa_${Date.now()}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const xp1 = ring2[idx1][0]; const yp1 = ring2[idx1][1];
+    const xp2 = ring2[idx2][0]; const yp2 = ring2[idx2][1];
+    const xp3 = ring2[idx3][0]; const yp3 = ring2[idx3][1];
+
+    const dx2 = x2 - x1; const dy2 = y2 - y1;
+    const dx3 = x3 - x1; const dy3 = y3 - y1;
+
+    const dxp2 = xp2 - xp1; const dyp2 = yp2 - yp1;
+    const dxp3 = xp3 - xp1; const dyp3 = yp3 - yp1;
+
+    const D = dx2 * dy3 - dx3 * dy2;
+    if (Math.abs(D) < 1e-10) {
+      setErrorMsg('Los vértices de la parcela son colineales y no configuran un polígono válido para esta matriz.');
+      return;
+    }
+
+    const ax = (dxp2 * dy3 - dxp3 * dy2) / D;
+    const bx = (dx2 * dxp3 - dx3 * dxp2) / D;
+    const cx = xp1 - ax * x1 - bx * y1;
+
+    const ay = (dyp2 * dy3 - dyp3 * dy2) / D;
+    const by = (dx2 * dyp3 - dx3 * dyp2) / D;
+    const cy = yp1 - ay * x1 - by * y1;
+
+    // RUN LEAST SQUARES MATRIX INVERSE METHOD (4 PARAMETERS) AS VERIFICATION
+    const helmert = calculateHelmertParameters(ring1, ring2);
+    // helmert has: a, b, Tx, Ty (where AX = a, BX = -b, AY = b, BY = a)
+
+    setParams3P({ ax, bx, cx, ay, by, cy, helmert, pdfDownloaded: downloadPdf });
+
+    if (downloadPdf) {
+      // GENERATE PDF
+      const doc = new jsPDF();
+      doc.setFontSize(16);
+      doc.text("INFORME DE CÁLCULO DE PARÁMETROS DE DESPLAZAMIENTO", 14, 20);
+      doc.setFontSize(11);
+      doc.text("Cálculo mediante Cramer (3 Puntos) y Matriz Inversa M.C.", 14, 28);
+
+      autoTable(doc, {
+        startY: 35,
+        head: [['Punto', 'X (Física)', 'Y (Física)', "X' (Catastro)", "Y' (Catastro)"]],
+        body: [
+          [(idx1 + 1).toString(), formatZero(x1, 3), formatZero(y1, 3), formatZero(xp1, 3), formatZero(yp1, 3)],
+          [(idx2 + 1).toString(), formatZero(x2, 3), formatZero(y2, 3), formatZero(xp2, 3), formatZero(yp2, 3)],
+          [(idx3 + 1).toString(), formatZero(x3, 3), formatZero(y3, 3), formatZero(xp3, 3), formatZero(yp3, 3)],
+        ]
+      });
+
+      let currentY = doc.lastAutoTable.finalY + 10;
+      doc.setFontSize(12);
+      doc.text("1. Parámetros Exactos (Método Cramer por 3 puntos):", 14, currentY);
+
+      const axS = formatZero(ax, 9);
+      const bxS = formatZero(bx, 9);
+      const cxS = formatZero(cx, 3);
+      const ayS = formatZero(ay, 9);
+      const byS = formatZero(by, 9);
+      const cyS = formatZero(cy, 3);
+
+      doc.setFontSize(9);
+      doc.setTextColor(100);
+      doc.text("Ecuación Genérica: X' = AX * X + BX * Y + CX  |  Y' = AY * X + BY * Y + CY", 14, currentY + 6);
+      doc.text(`Ecuación Eje X: X' = (${axS}) * X + (${bxS}) * Y + (${cxS})`, 14, currentY + 11);
+      doc.text(`Ecuación Eje Y: Y' = (${ayS}) * X + (${byS}) * Y + (${cyS})`, 14, currentY + 16);
+      doc.setTextColor(0);
+
+      const paramData = [
+        ['AX', axS, 'AY', ayS],
+        ['BX', bxS, 'BY', byS],
+        ['CX (Tx)', cxS, 'CY (Ty)', cyS]
+      ];
+
+      autoTable(doc, {
+        startY: currentY + 21,
+        head: [['Eje X', 'Valor', 'Eje Y', 'Valor']],
+        body: paramData
+      });
+
+      currentY = doc.lastAutoTable.finalY + 10;
+      doc.setFontSize(12);
+      doc.text("2. Verificación Mínimos Cuadrados (Todas las coordenadas):", 14, currentY);
+
+      if (helmert.errorMsg) {
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text("Error en verificación: " + helmert.errorMsg, 14, currentY + 7);
+        doc.setTextColor(0);
+        currentY += 15;
+      } else {
+        const haS = formatZero(helmert.a, 9);
+        const hbS = formatZero(helmert.b, 9);
+        const hTxS = formatZero(helmert.Tx, 3);
+        const hTyS = formatZero(helmert.Ty, 3);
+
+        doc.setFontSize(9);
+        doc.setTextColor(100);
+        doc.text("Ecuación Genérica: X' = a * X - b * Y + Tx  |  Y' = b * X + a * Y + Ty", 14, currentY + 6);
+        doc.text(`Ecuación Eje X: X' = (${haS}) * X - (${hbS}) * Y + (${hTxS})`, 14, currentY + 11);
+        doc.text(`Ecuación Eje Y: Y' = (${hbS}) * X + (${haS}) * Y + (${hTyS})`, 14, currentY + 16);
+        doc.setTextColor(0);
+
+        const helmertData = [
+          ['AX', haS, 'AY', hbS],
+          ['BX', formatZero(-helmert.b, 9), 'BY', haS],
+          ['CX (Tx)', hTxS, 'CY (Ty)', hTyS]
+        ];
+        autoTable(doc, {
+          startY: currentY + 21,
+          head: [['Eje X', 'Valor', 'Eje Y', 'Valor']],
+          body: helmertData
+        });
+        currentY = doc.lastAutoTable.finalY + 10;
+      }
+
+      doc.setFontSize(12);
+      doc.text("Comprobación de Coordenadas de todo el Perímetro:", 14, currentY);
+
+      const verificationBody = [];
+      for (let i = 0; i < ring1.length; i++) {
+        let rx = ring1[i][0];
+        let ry = ring1[i][1];
+        let cxF = ax * rx + bx * ry + cx;
+        let cyF = ay * rx + by * ry + cy;
+
+        verificationBody.push([
+          (i + 1).toString(),
+          formatZero(rx, 3), formatZero(ry, 3),
+          formatZero(cxF, 3), formatZero(cyF, 3)
+        ]);
+      }
+
+      autoTable(doc, {
+        startY: currentY + 5,
+        head: [['Nº Punto', 'X Origen', 'Y Origen', 'X Destino', 'Y Destino']],
+        body: verificationBody
+      });
+
+      // --- ADD FOOTERS TO ALL PAGES ---
+      const pageCount = doc.internal.getNumberOfPages();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        
+        // Formateado legal/visual
+        doc.line(14, pageHeight - 15, pageWidth - 14, pageHeight - 15);
+        doc.text("Generado exclusivamente mediante herramienta topográfica online: generador-gml.xyz", 14, pageHeight - 10);
+        doc.text(`Página ${i} de ${pageCount}`, pageWidth - 14, pageHeight - 10, { align: 'right' });
+      }
+
+      doc.save(`Informe_Desplazamiento_Catastro_${Date.now()}.pdf`);
+    }
   };
 
   return (
     <div className="modal-overlay">
       <div className="modal-content" style={{ maxWidth: '600px' }}>
         <div className="modal-header">
-          <h2>Ajuste Geométrico (Matriz Inversa)</h2>
+          <h2>PARÁMETROS DESPLAZAMIENTO</h2>
           <button className="close-btn" onClick={onClose}>&times;</button>
         </div>
-        
+
         <div className="modal-body">
           <div className="tabs" style={{ display: 'flex', gap: '10px', marginBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '10px' }}>
-            <button 
-              className={`btn ${activeTab === 1 ? 'btn-primary' : 'btn-secondary'}`} 
+            <button
+              className={`btn ${activeTab === 1 ? 'btn-primary' : 'btn-secondary'}`}
               onClick={() => { setActiveTab(1); resetState(); }}
-              style={{ flex: 1, padding: '10px' }}
+              style={{ flex: 1, padding: '10px', fontSize: '0.9rem' }}
             >
-              1. Ajuste Automágico a Catastro
+              1. Extraer Parámetros (PDF)
             </button>
-            <button 
-              className={`btn ${activeTab === 2 ? 'btn-primary' : 'btn-secondary'}`} 
+            <button
+              className={`btn ${activeTab === 2 ? 'btn-primary' : 'btn-secondary'}`}
               onClick={() => { setActiveTab(2); resetState(); }}
               style={{ flex: 1, padding: '10px' }}
             >
-              2. Extraer Parámetros (2 Parcelas)
+              2. Ajuste Automágico a Catastro (beta)
             </button>
           </div>
 
           {errorMsg && (
-            <div className="alert alert-error blink-error" style={{ 
-              marginBottom: '15px', 
-              backgroundColor: 'rgba(239, 68, 68, 0.1)', 
-              color: '#ef4444', 
+            <div className="alert alert-error blink-error" style={{
+              marginBottom: '15px',
+              backgroundColor: 'rgba(239, 68, 68, 0.1)',
+              color: '#ef4444',
               border: '2px solid #ef4444',
               padding: '12px',
               borderRadius: '6px',
@@ -211,17 +374,17 @@ CY;${results.Ty.toFixed(3).replace('.', ',')}`;
             </div>
           )}
 
-          {activeTab === 1 && (
+          {activeTab === 2 && (
             <div>
               <p style={{ fontSize: '0.85rem', color: '#ccc', marginBottom: '15px' }}>
-                Selecciona la geometría obtenida en campo. El sistema cruzará datos con la Sede de Catastro 
+                Selecciona la geometría obtenida en campo. El sistema cruzará datos con la Sede de Catastro
                 para encontrar la parcela oficial más cercana y calculará la rotación y traslación óptima iterando hasta obtener el mejor encaje posible. Generará la versión "Adaptada".
               </p>
               <div className="form-group">
                 <label>Parcela de la Realidad Física (Origen)</label>
-                <select 
-                  className="form-control" 
-                  value={selectedRealMapId} 
+                <select
+                  className="form-control"
+                  value={selectedRealMapId}
                   onChange={(e) => setSelectedRealMapId(e.target.value)}
                 >
                   <option value="">-- Selecciona una parcela --</option>
@@ -231,9 +394,9 @@ CY;${results.Ty.toFixed(3).replace('.', ',')}`;
                 </select>
               </div>
 
-              <button 
-                className="btn btn-primary" 
-                onClick={handleRunOption1} 
+              <button
+                className="btn btn-primary"
+                onClick={handleRunOption1}
                 disabled={isProcessing}
                 style={{ width: '100%', marginTop: '10px', padding: '12px' }}
               >
@@ -242,18 +405,17 @@ CY;${results.Ty.toFixed(3).replace('.', ',')}`;
             </div>
           )}
 
-          {activeTab === 2 && (
-            <div>
+          {activeTab === 1 && (
+            <div style={{ maxHeight: '60vh', overflowY: 'auto', paddingRight: '5px' }}>
               <p style={{ fontSize: '0.85rem', color: '#ccc', marginBottom: '15px' }}>
-                Selecciona las dos geometrías: la del levantamiento (origen) y la que has encajado visualmente a catastro (adaptada). Extraeremos matemáticamente **Tx**, **Ty** y el **Giro** necesarios para formalizar los anexos obligatorios mediante el método de Matriz Inversa.
-                <br/><strong style={{ color: 'var(--accent-primary)' }}>NOTA IMPORTANTE: Ambas líneas deben estar formadas por exactamente el mismo número y orden de vértices topológicos.</strong>
+                Selecciona la geometría física de origen y la adaptada a Catastro. El sistema extraerá de forma automática 3 puntos no colineales mediante Matriz Inversa y exportará un **Informe en PDF** con los parámetros deducidos junto a la comprobación vértice por vértice del ajuste perimetral.
               </p>
-              
+
               <div className="form-group" style={{ marginBottom: '10px' }}>
                 <label>Parcela de la Realidad Física (Origen)</label>
-                <select 
-                  className="form-control" 
-                  value={selectedRealMapId} 
+                <select
+                  className="form-control"
+                  value={selectedRealMapId}
                   onChange={(e) => setSelectedRealMapId(e.target.value)}
                 >
                   <option value="">-- Selecciona una parcela --</option>
@@ -265,9 +427,9 @@ CY;${results.Ty.toFixed(3).replace('.', ',')}`;
 
               <div className="form-group" style={{ marginBottom: '15px' }}>
                 <label>Parcela Ya Adaptada a Catastro (Destino)</label>
-                <select 
-                  className="form-control" 
-                  value={selectedAdaptedId} 
+                <select
+                  className="form-control"
+                  value={selectedAdaptedId}
                   onChange={(e) => setSelectedAdaptedId(e.target.value)}
                 >
                   <option value="">-- Selecciona una parcela --</option>
@@ -277,62 +439,64 @@ CY;${results.Ty.toFixed(3).replace('.', ',')}`;
                 </select>
               </div>
 
-              <button 
-                className="btn btn-primary" 
-                onClick={handleRunOption2} 
-                style={{ width: '100%', padding: '12px' }}
-              >
-                Extraer Parámetros de Transformación
-              </button>
-            </div>
-          )}
+              <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => handleRunOption2(false)}
+                  style={{ flex: 1, padding: '10px' }}
+                >
+                  Solo Calcular Parámetros
+                </button>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => handleRunOption2(true)}
+                  style={{ flex: 1, padding: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                >
+                  <Download size={18} />
+                  Descargar PDF
+                </button>
+              </div>
 
-          {results && !errorMsg && (
-            <div className="results-panel glass-card" style={{ marginTop: '20px', padding: '15px', border: '1px solid var(--accent-primary)' }}>
-              <h4 style={{ margin: '0 0 10px 0', color: 'var(--accent-primary)' }}>Resultados de Transformación (Matriz Inversa)</h4>
-              
-              {activeTab === 2 ? (
-                <div style={{ textAlign: 'center' }}>
-                  <table style={{ width: '100%', maxWidth: '300px', margin: '0 auto 15px auto', borderCollapse: 'collapse', textAlign: 'center', fontSize: '0.9rem', backgroundColor: '#fff', color: '#000' }}>
+              {params3P && (
+                <div className="results-panel glass-card" style={{ marginTop: '20px', padding: '15px', border: '1px solid var(--accent-primary)' }}>
+                  <p style={{ fontSize: '0.8rem', color: '#8fbc8f', marginBottom: '10px' }}>
+                    ✓ {params3P.pdfDownloaded ? "El PDF ha sido exportado. Estos son los parámetros calculados:" : "Parámetros calculados en pantalla:"}
+                  </p>
+                  <h4 style={{ margin: '0 0 10px 0', color: 'var(--accent-primary)' }}>MATRIZ DE PARÁMETROS (3 Puntos)</h4>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center', fontSize: '0.85rem', backgroundColor: '#2a2a2a', color: '#fff', marginBottom: '15px' }}>
                     <thead>
                       <tr>
-                        <th colSpan="2" style={{ backgroundColor: '#7baaf7', color: '#000', padding: '6px', border: '1px solid #000', textTransform: 'uppercase' }}>
-                          PARAMETROS DE DESPLAZAMIENTO CATASTRO
-                        </th>
+                        <th style={{ padding: '5px', border: '1px solid #444', color: '#7baaf7' }}>PARÁMETROS</th>
+                        <th style={{ padding: '5px', border: '1px solid #444', color: '#7baaf7' }}>VALORES</th>
                       </tr>
                     </thead>
                     <tbody>
-                      <tr><td style={{ border: '1px solid #000', padding: '4px', fontWeight: 'bold' }}>AX</td><td style={{ border: '1px solid #000', padding: '4px' }}>{results.a.toFixed(9).replace('.', ',')}</td></tr>
-                      <tr><td style={{ border: '1px solid #000', padding: '4px', fontWeight: 'bold' }}>BX</td><td style={{ border: '1px solid #000', padding: '4px' }}>{(-results.b).toFixed(9).replace('.', ',')}</td></tr>
-                      <tr><td style={{ border: '1px solid #000', padding: '4px', fontWeight: 'bold' }}>CX</td><td style={{ border: '1px solid #000', padding: '4px' }}>{results.Tx.toFixed(3).replace('.', ',')}</td></tr>
-                      <tr><td style={{ border: '1px solid #000', padding: '4px', fontWeight: 'bold' }}>AY</td><td style={{ border: '1px solid #000', padding: '4px' }}>{results.b.toFixed(9).replace('.', ',')}</td></tr>
-                      <tr><td style={{ border: '1px solid #000', padding: '4px', fontWeight: 'bold' }}>BY</td><td style={{ border: '1px solid #000', padding: '4px' }}>{results.a.toFixed(9).replace('.', ',')}</td></tr>
-                      <tr><td style={{ border: '1px solid #000', padding: '4px', fontWeight: 'bold' }}>CY</td><td style={{ border: '1px solid #000', padding: '4px' }}>{results.Ty.toFixed(3).replace('.', ',')}</td></tr>
+                      <tr><td style={{ border: '1px solid #444', padding: '5px' }}>AX</td><td style={{ border: '1px solid #444', padding: '5px' }}>{formatZero(params3P.ax, 9)}</td></tr>
+                      <tr><td style={{ border: '1px solid #444', padding: '5px' }}>BX</td><td style={{ border: '1px solid #444', padding: '5px' }}>{formatZero(params3P.bx, 9)}</td></tr>
+                      <tr><td style={{ border: '1px solid #444', padding: '5px' }}>CX</td><td style={{ border: '1px solid #444', padding: '5px' }}>{formatZero(params3P.cx, 3)}</td></tr>
+                      <tr><td style={{ border: '1px solid #444', padding: '5px', borderTop: '2px solid #555' }}>AY</td><td style={{ border: '1px solid #444', padding: '5px', borderTop: '2px solid #555' }}>{formatZero(params3P.ay, 9)}</td></tr>
+                      <tr><td style={{ border: '1px solid #444', padding: '5px' }}>BY</td><td style={{ border: '1px solid #444', padding: '5px' }}>{formatZero(params3P.by, 9)}</td></tr>
+                      <tr><td style={{ border: '1px solid #444', padding: '5px' }}>CY</td><td style={{ border: '1px solid #444', padding: '5px' }}>{formatZero(params3P.cy, 3)}</td></tr>
                     </tbody>
                   </table>
-                  <button 
-                    onClick={handleDownloadCSV}
-                    className="btn btn-secondary"
-                    style={{ fontSize: '0.75rem', padding: '8px 12px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                  >
-                    <Download size={14} />
-                    Descargar en Excel
-                  </button>
                 </div>
-              ) : (
-                <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '0.9rem', lineHeight: '1.6' }}>
-                  <li><strong>Desplazamiento X (Tx):</strong> {results.Tx.toFixed(3)} m</li>
-                  <li><strong>Desplazamiento Y (Ty):</strong> {results.Ty.toFixed(3)} m</li>
-                  <li><strong>Giro (Rotación):</strong> {results.rotationDeg.toFixed(6)}°</li>
-                  <li><strong>Factor de Escala (K):</strong> {results.scale.toFixed(6)}</li>
-                </ul>
               )}
-              
-              {activeTab === 1 && (
-                <p style={{ marginTop: '10px', fontSize: '0.8rem', color: '#8fbc8f' }}>
-                  ✓ La parcela adaptada se ha añadido a tu proyecto con éxito. Ya puedes exportarla en formato GML o DXF.
-                </p>
-              )}
+            </div>
+          )}
+
+          {results && !errorMsg && activeTab === 2 && (
+            <div className="results-panel glass-card" style={{ marginTop: '20px', padding: '15px', border: '1px solid var(--accent-primary)' }}>
+              <h4 style={{ margin: '0 0 10px 0', color: 'var(--accent-primary)' }}>Resultados de Traslación/Rotación Mínimo-Cuadrática</h4>
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '0.9rem', lineHeight: '1.6' }}>
+                <li><strong>Desplazamiento X (Tx):</strong> {results.Tx.toFixed(3)} m</li>
+                <li><strong>Desplazamiento Y (Ty):</strong> {results.Ty.toFixed(3)} m</li>
+                <li><strong>Giro (Rotación):</strong> {results.rotationDeg.toFixed(6)}°</li>
+                <li><strong>Factor de Escala (K):</strong> {results.scale.toFixed(6)}</li>
+              </ul>
+
+              <p style={{ marginTop: '10px', fontSize: '0.8rem', color: '#8fbc8f' }}>
+                ✓ La parcela adaptada se ha añadido a tu proyecto con éxito. Ya puedes exportarla en formato GML o DXF.
+              </p>
             </div>
           )}
         </div>
