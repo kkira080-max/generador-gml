@@ -17,6 +17,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import LinksModal from './components/LinksModal';
 import CramerModal from './components/CramerModal';
 import Toast from './components/Toast';
+import DomainRedirectModal from './components/DomainRedirectModal';
 import { showToast } from './utils/toast';
 import proj4 from 'proj4';
 
@@ -685,6 +686,7 @@ function App() {
            setVisibleParcelIds(prev => new Set([...prev, newP.id]));
         }}
       />
+      <DomainRedirectModal />
       <Toast />
     </div>
   );
