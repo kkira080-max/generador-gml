@@ -183,7 +183,9 @@ export const applyHelmertTransformation = (coordsArray, { Tx, Ty, a, b }) => {
  * @param {Array} cadastreCoords - Reference geometry to match
  * @returns {Object} Best transformation parameters to apply { Tx, Ty, a, b, rotationDeg }
  */
-export const findBestCadastreFit = (originalCoords, cadastreCoords) => {
+export const findBestCadastreFit = (originalCoords, cadastreCoords, options = {}) => {
+  const { manualOffsetX = 0, manualOffsetY = 0 } = options;
+
   if (!originalCoords || !cadastreCoords || originalCoords.length === 0 || cadastreCoords.length === 0) {
     throw new Error("Coordenadas inválidas para el ajuste.");
   }
@@ -266,7 +268,7 @@ export const findBestCadastreFit = (originalCoords, cadastreCoords) => {
   for(let dx = -1.5; dx <= 1.5; dx += 0.15) {
      for(let dy = -1.5; dy <= 1.5; dy += 0.15) {
         if (Math.hypot(dx, dy) <= 1.5) {
-            candidates.push({ rotRad: 0, tx: dx, ty: dy });
+            candidates.push({ rotRad: 0, tx: dx + manualOffsetX, ty: dy + manualOffsetY });
         }
      }
   }
@@ -300,7 +302,7 @@ export const findBestCadastreFit = (originalCoords, cadastreCoords) => {
              let sinR = Math.sin(normR);
 
              // 1. Alineación estricta de centroides con este sutil giro.
-             candidates.push({ rotRad: normR, tx: tgtCentroid[0] - origCentroid[0], ty: tgtCentroid[1] - origCentroid[1] });
+             candidates.push({ rotRad: normR, tx: tgtCentroid[0] - origCentroid[0] + manualOffsetX, ty: tgtCentroid[1] - origCentroid[1] + manualOffsetY });
 
              // 2. Emparejamiento Topográfico por Vértices (Desplazamiento para centrar lindero)
              let dxMid = midO[0] - origCentroid[0];
@@ -311,53 +313,67 @@ export const findBestCadastreFit = (originalCoords, cadastreCoords) => {
              let tx_mid = midT[0] - midORotX;
              let ty_mid = midT[1] - midORotY;
              
-             candidates.push({ rotRad: normR, tx: tx_mid, ty: ty_mid });
+             candidates.push({ rotRad: normR, tx: tx_mid + manualOffsetX, ty: ty_mid + manualOffsetY });
          });
      });
   });
 
   // Evaluador
-  let bestAngleRad = 0;
-  let maxArea = -100;
-  let bestTx = 0;
-  let bestTy = 0;
+  let scoredCandidates = [];
 
   candidates.forEach(cand => {
-      // Filtro de ruido: un topógrafo no buscaría la parcela original a 6 metros de distancia
-      let movedCx = origCentroid[0] + cand.tx;
-      // Filtro de rigor métrico: el desplazamiento total (distancia movida desde las coordenadas físicas reales)
-      // no debe superar el umbral dictado por el operario topográfico (1.5 metros máximo)
-      let displacementFromOriginal = Math.hypot(cand.tx, cand.ty);
-      
-      if (displacementFromOriginal > 1.5) return;
+      // Filtro de rigor métrico: el desplazamiento del vector relativo al anclaje guiado
+      let relativeTx = cand.tx - manualOffsetX;
+      let relativeTy = cand.ty - manualOffsetY;
+      let displacementFromAnchor = Math.hypot(relativeTx, relativeTy);
+      if (displacementFromAnchor > 1.5) return;
 
       const area = testFit(cand.rotRad, cand.tx, cand.ty);
-      if (area > maxArea) {
-          maxArea = area;
-          bestAngleRad = cand.rotRad;
-          bestTx = cand.tx;
-          bestTy = cand.ty;
+      if (area > 0) {
+          scoredCandidates.push({ ...cand, area });
       }
   });
 
-  // Deshacer traslación local (aplicada post-rotación de centroide) 
-  // X_new = (X - Xc)*a - (Y - Yc)*b + Xc + tx
-  // X_new = X*a - Y*b + [Xc - Xc*a + Yc*b + tx]
-  const a = Math.cos(bestAngleRad);
-  const b = Math.sin(bestAngleRad);
+  scoredCandidates.sort((a,b) => b.area - a.area);
+  
+  // Filtro de ruido: unificar candidatos muy parecidos
+  let uniqueCandidates = [];
+  scoredCandidates.forEach(cand => {
+     let isDuplicate = uniqueCandidates.some(uc => {
+        let dist = Math.hypot(cand.tx - uc.tx, cand.ty - uc.ty);
+        let rotDiff = Math.abs(cand.rotRad - uc.rotRad);
+        return dist < 0.1 && rotDiff < (1 * Math.PI / 180);
+     });
+     if (!isDuplicate) {
+        uniqueCandidates.push(cand);
+     }
+  });
 
-  const Tx = origCentroid[0] - origCentroid[0] * a + origCentroid[1] * b + bestTx;
-  const Ty = origCentroid[1] - origCentroid[0] * b - origCentroid[1] * a + bestTy;
+  // Asegurar siempre un fallback
+  if (uniqueCandidates.length === 0) {
+      uniqueCandidates.push({ rotRad: 0, tx: 0, ty: 0, area: 0 });
+  }
 
-  return {
-    Tx,
-    Ty,
-    a,
-    b,
-    rotationDeg: bestAngleRad * (180 / Math.PI),
-    scale: 1.0,
-    maxArea
-  };
+  // Tomar hasta 5 buenas alternativas
+  uniqueCandidates = uniqueCandidates.slice(0, 5);
+
+  return uniqueCandidates.map(cand => {
+      const a = Math.cos(cand.rotRad);
+      const b = Math.sin(cand.rotRad);
+
+      const Tx = origCentroid[0] - origCentroid[0] * a + origCentroid[1] * b + cand.tx;
+      const Ty = origCentroid[1] - origCentroid[0] * b - origCentroid[1] * a + cand.ty;
+
+      return {
+        Tx,
+        Ty,
+        a,
+        b,
+        rotationDeg: cand.rotRad * (180 / Math.PI),
+        scale: 1.0,
+        maxArea: cand.area
+      };
+  });
 };
 
 function isClosed(ring) {

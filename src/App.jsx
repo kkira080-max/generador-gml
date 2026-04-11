@@ -673,7 +673,15 @@ function App() {
         parcels={displayParcels}
         huso={huso}
         onAddParcel={(newP) => {
-           setRawParcels(prev => [...prev, newP]);
+           setRawParcels(prev => {
+              const exists = prev.findIndex(p => p.id === newP.id);
+              if (exists >= 0) {
+                 const copy = [...prev];
+                 copy[exists] = newP;
+                 return copy;
+              }
+              return [...prev, newP];
+           });
            setVisibleParcelIds(prev => new Set([...prev, newP.id]));
         }}
       />

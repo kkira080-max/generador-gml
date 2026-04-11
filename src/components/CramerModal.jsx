@@ -12,8 +12,12 @@ export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParce
   const [selectedAdaptedId, setSelectedAdaptedId] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [results, setResults] = useState(null);
+  const [fitAlternatives, setFitAlternatives] = useState([]);
+  const [currentFitIndex, setCurrentFitIndex] = useState(0);
   const [params3P, setParams3P] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [manualOffsetX, setManualOffsetX] = useState(0);
+  const [manualOffsetY, setManualOffsetY] = useState(0);
 
   // Evita pintar valores como -0.000000000
   const formatZero = (val, dec) => {
@@ -33,7 +37,52 @@ export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParce
   const resetState = () => {
     setErrorMsg('');
     setResults(null);
+    setFitAlternatives([]);
+    setCurrentFitIndex(0);
     setParams3P(null);
+  };
+
+  const applyAlternative = (index, fitsArray) => {
+    const activeFits = fitsArray || fitAlternatives;
+    if (!activeFits || activeFits.length === 0) return;
+    
+    const fit = activeFits[index];
+    setResults(fit);
+    setCurrentFitIndex(index);
+
+    const newCoords = applyHelmertTransformation(realParcel.originalCoords, fit);
+
+    let wgs84Coords;
+    if (realParcel.geometry.type === 'MultiPolygon') {
+      wgs84Coords = newCoords.map(ring => transformToWGS84(ring, huso));
+    } else {
+      wgs84Coords = newCoords.map(ring => transformToWGS84(ring, huso));
+    }
+
+    const geom = {
+      type: 'Polygon',
+      coordinates: wgs84Coords
+    };
+
+    const newArea = calculatePolygonArea(newCoords[0]);
+    const adaptedName = `${realParcel.name} (ADAPTADA)`;
+    
+    // Usar un ID fijo en base al origen para que App.jsx lo sobreescriba en vez de duplicarlo cada vez
+    const adaptedId = `adapted-${realParcel.id}`;
+
+    onAddParcel({
+      id: adaptedId,
+      name: adaptedName,
+      filename: `${adaptedName}.gml`,
+      geometry: geom,
+      originalCoords: newCoords,
+      area: newArea,
+      huso: huso,
+      isGmlV4: false
+    });
+    
+    // Auto-select for the Cramer matrix tab
+    setSelectedAdaptedId(adaptedId);
   };
 
   const handleRunOption1 = async () => {
@@ -96,40 +145,15 @@ export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParce
 
       if (!closestCadastre) throw new Error("No se pudo identificar una parcela oficial cercana.");
 
-      // Run iterative fit
-      const fit = findBestCadastreFit(realParcel.originalCoords, closestCadastre.originalCoords);
-
-      setResults(fit);
-
-      // Create new adapted geometry
-      const newCoords = applyHelmertTransformation(realParcel.originalCoords, fit);
-
-      // Convert back to WGS84 for mapping
-      let wgs84Coords;
-      if (realParcel.geometry.type === 'MultiPolygon') {
-        wgs84Coords = newCoords.map(ring => transformToWGS84(ring, huso)); // Simplification: assuming input was mostly 1 poly array structure 
-      } else {
-        wgs84Coords = newCoords.map(ring => transformToWGS84(ring, huso));
-      }
-
-      const geom = {
-        type: 'Polygon',
-        coordinates: wgs84Coords
+      // Run iterative fit returning an array of top alternatives
+      const options = {
+        manualOffsetX: parseFloat(manualOffsetX) || 0,
+        manualOffsetY: parseFloat(manualOffsetY) || 0
       };
-
-      const newArea = calculatePolygonArea(newCoords[0]);
-
-      const adaptedName = `${realParcel.name} (ADAPTADA)`;
-      onAddParcel({
-        id: `adapted-${Date.now()}`,
-        name: adaptedName,
-        filename: `${adaptedName}.gml`,
-        geometry: geom,
-        originalCoords: newCoords,
-        area: newArea,
-        huso: huso,
-        isGmlV4: false
-      });
+      const fits = findBestCadastreFit(realParcel.originalCoords, closestCadastre.originalCoords, options);
+      
+      setFitAlternatives(fits);
+      applyAlternative(0, fits);
 
     } catch (e) {
       setErrorMsg(e.message || "Error al realizar el ajuste automático.");
@@ -394,13 +418,45 @@ export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParce
                 </select>
               </div>
 
+              <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', padding: '12px', marginBottom: '15px' }}>
+                 <label style={{ color: '#38bdf8', fontSize: '0.8rem', display: 'block', marginBottom: '10px' }}>Guía Manual Opcional (Desplazamiento inicial del foco)</label>
+                 <div style={{ display: 'flex', gap: '15px' }}>
+                    <div style={{ flex: 1 }}>
+                       <label style={{ fontSize: '0.7rem', color: '#999' }}>Eje X (Este / Oeste) [m]</label>
+                       <input 
+                         type="number" 
+                         step="0.5" 
+                         className="form-control" 
+                         placeholder="Ej. 2.0 (Este)" 
+                         value={manualOffsetX}
+                         onChange={(e) => setManualOffsetX(e.target.value)}
+                       />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                       <label style={{ fontSize: '0.7rem', color: '#999' }}>Eje Y (Norte / Sur) [m]</label>
+                       <input 
+                         type="number" 
+                         step="0.5" 
+                         className="form-control" 
+                         placeholder="Ej. -1.5 (Sur)" 
+                         value={manualOffsetY}
+                         onChange={(e) => setManualOffsetY(e.target.value)}
+                       />
+                    </div>
+                 </div>
+              </div>
+
+              <div style={{ background: 'rgba(56, 189, 248, 0.1)', borderLeft: '3px solid #38bdf8', padding: '10px', fontSize: '0.8rem', color: '#e0f2fe', marginBottom: '15px' }}>
+                💡 <strong>Tip visual:</strong> Puedes pulsar el botón "X" o cerrar esta ventana libremente para ver el mapa en pantalla completa y comprobar cómo queda la parcela. Tus datos y el progreso de ajuste se mantienen intactos al volver a abrir.
+              </div>
+
               <button
                 className="btn btn-primary"
                 onClick={handleRunOption1}
                 disabled={isProcessing}
                 style={{ width: '100%', marginTop: '10px', padding: '12px' }}
               >
-                {isProcessing ? 'Procesando ajuste espacial...' : 'Calcular Ajuste Automático'}
+                {isProcessing ? 'Procesando ajuste espacial...' : 'Calcular Ajuste Automágico'}
               </button>
             </div>
           )}
@@ -486,7 +542,19 @@ export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParce
 
           {results && !errorMsg && activeTab === 2 && (
             <div className="results-panel glass-card" style={{ marginTop: '20px', padding: '15px', border: '1px solid var(--accent-primary)' }}>
-              <h4 style={{ margin: '0 0 10px 0', color: 'var(--accent-primary)' }}>Resultados de Traslación/Rotación Mínimo-Cuadrática</h4>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <h4 style={{ margin: 0, color: 'var(--accent-primary)' }}>Resultados de Traslación/Rotación (Alt. {currentFitIndex + 1}/{fitAlternatives.length})</h4>
+                
+                {fitAlternatives.length > 1 && (
+                  <button 
+                    onClick={() => applyAlternative((currentFitIndex + 1) % fitAlternatives.length)}
+                    style={{ background: 'rgba(56, 189, 248, 0.15)', border: '1px solid #38bdf8', color: '#38bdf8', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '5px' }}
+                  >
+                    🔄 Probar otra alternativa
+                  </button>
+                )}
+              </div>
+              
               <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '0.9rem', lineHeight: '1.6' }}>
                 <li><strong>Desplazamiento X (Tx):</strong> {results.Tx.toFixed(3)} m</li>
                 <li><strong>Desplazamiento Y (Ty):</strong> {results.Ty.toFixed(3)} m</li>
