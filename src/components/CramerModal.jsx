@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { Download } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 import { calculateHelmertParameters, findBestCadastreFit, applyHelmertTransformation } from '../utils/transformations';
 import { calculateBbox, calculatePolygonArea, closeRing, transformToWGS84, calculateCentroid } from '../utils/geoUtils';
 import { fetchParcelsByBbox } from '../utils/cadastreService';
 
 export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParcel }) {
-  const [activeTab, setActiveTab] = useState(2);
+  const [activeTab, setActiveTab] = useState(1);
   const [selectedRealMapId, setSelectedRealMapId] = useState('');
   const [selectedAdaptedId, setSelectedAdaptedId] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -28,6 +29,14 @@ export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParce
     return str;
   };
 
+  const getOuterRing = (coords) => {
+    if (!coords || !coords[0]) return null;
+    if (typeof coords[0][0] === 'number') return coords; // Ring: [[x,y], ...]
+    if (typeof coords[0][0][0] === 'number') return coords[0]; // Polygon: [ [[x,y]], [[x,y]] ]
+    if (typeof coords[0][0][0][0] === 'number') return coords[0][0]; // MultiPolygon
+    return coords;
+  };
+
   if (!isOpen) return null;
 
   const validParcels = parcels.filter(p => !p.isCadastre && p.originalCoords);
@@ -45,7 +54,7 @@ export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParce
   const applyAlternative = (index, fitsArray) => {
     const activeFits = fitsArray || fitAlternatives;
     if (!activeFits || activeFits.length === 0) return;
-    
+
     const fit = activeFits[index];
     setResults(fit);
     setCurrentFitIndex(index);
@@ -66,7 +75,7 @@ export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParce
 
     const newArea = calculatePolygonArea(newCoords[0]);
     const adaptedName = `${realParcel.name} (ADAPTADA)`;
-    
+
     // Usar un ID fijo en base al origen para que App.jsx lo sobreescriba en vez de duplicarlo cada vez
     const adaptedId = `adapted-${realParcel.id}`;
 
@@ -80,7 +89,7 @@ export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParce
       huso: huso,
       isGmlV4: false
     });
-    
+
     // Auto-select for the Cramer matrix tab
     setSelectedAdaptedId(adaptedId);
   };
@@ -114,14 +123,6 @@ export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParce
         throw new Error("No hay cartografía catastral en esta zona. Descarga primero usando la lupa.");
       }
 
-      const getOuterRing = (coords) => {
-        if (!coords || !coords[0]) return null;
-        if (typeof coords[0][0] === 'number') return coords; // Ring: [[x,y], ...]
-        if (typeof coords[0][0][0] === 'number') return coords[0]; // Polygon: [ [[x,y]], [[x,y]] ]
-        if (typeof coords[0][0][0][0] === 'number') return coords[0][0]; // MultiPolygon
-        return coords;
-      };
-
       // Check which cadastre parcel is closest to centroid
       const origRing = getOuterRing(realParcel.originalCoords);
       const origCentroid = calculateCentroid(origRing);
@@ -151,7 +152,7 @@ export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParce
         manualOffsetY: parseFloat(manualOffsetY) || 0
       };
       const fits = findBestCadastreFit(realParcel.originalCoords, closestCadastre.originalCoords, options);
-      
+
       setFitAlternatives(fits);
       applyAlternative(0, fits);
 
@@ -169,14 +170,6 @@ export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParce
       setErrorMsg("Debes seleccionar ambas parcelas: la original (realidad física) y la adaptada.");
       return;
     }
-
-    const getOuterRing = (coords) => {
-      if (!coords || !coords[0]) return null;
-      if (typeof coords[0][0] === 'number') return coords;
-      if (typeof coords[0][0][0] === 'number') return coords[0];
-      if (typeof coords[0][0][0][0] === 'number') return coords[0][0];
-      return coords;
-    };
 
     const ring1 = getOuterRing(realParcel?.originalCoords);
     const ring2 = getOuterRing(adaptedParcel?.originalCoords);
@@ -221,9 +214,28 @@ export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParce
 
     // RUN LEAST SQUARES MATRIX INVERSE METHOD (4 PARAMETERS) AS VERIFICATION
     const helmert = calculateHelmertParameters(ring1, ring2);
-    // helmert has: a, b, Tx, Ty (where AX = a, BX = -b, AY = b, BY = a)
 
-    setParams3P({ ax, bx, cx, ay, by, cy, helmert, pdfDownloaded: downloadPdf });
+    // CALCULATE RESIDUALS FOR ALL POINTS
+    const residuals = ring1.map((p, i) => {
+      const rx = p[0];
+      const ry = p[1];
+      const cxF = ax * rx + bx * ry + cx;
+      const cyF = ay * rx + by * ry + cy;
+
+      const destX = ring2[i][0];
+      const destY = ring2[i][1];
+
+      const errX = cxF - destX;
+      const errY = cyF - destY;
+      const errDist = Math.hypot(errX, errY);
+
+      return { id: i + 1, errX, errY, errDist };
+    });
+
+    const maxErr = Math.max(...residuals.map(r => r.errDist));
+    const avgErr = residuals.reduce((acc, r) => acc + r.errDist, 0) / residuals.length;
+
+    setParams3P({ ax, bx, cx, ay, by, cy, helmert, residuals, maxErr, avgErr, pdfDownloaded: downloadPdf });
 
     if (downloadPdf) {
       // GENERATE PDF
@@ -313,24 +325,88 @@ export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParce
       doc.text("Comprobación de Coordenadas de todo el Perímetro:", 14, currentY);
 
       const verificationBody = [];
+      let totalErrorCramer = 0;
+      let maxErrorCramer = 0;
+
       for (let i = 0; i < ring1.length; i++) {
         let rx = ring1[i][0];
         let ry = ring1[i][1];
         let cxF = ax * rx + bx * ry + cx;
         let cyF = ay * rx + by * ry + cy;
 
+        let destX = ring2[i][0];
+        let destY = ring2[i][1];
+
+        let errDist = Math.hypot(cxF - destX, cyF - destY);
+        totalErrorCramer += errDist;
+        if (errDist > maxErrorCramer) maxErrorCramer = errDist;
+
         verificationBody.push([
           (i + 1).toString(),
           formatZero(rx, 3), formatZero(ry, 3),
-          formatZero(cxF, 3), formatZero(cyF, 3)
+          formatZero(destX, 3), formatZero(destY, 3),
+          formatZero(cxF, 3), formatZero(cyF, 3),
+          formatZero(errDist, 3)
         ]);
       }
 
       autoTable(doc, {
         startY: currentY + 5,
-        head: [['Nº Punto', 'X Origen', 'Y Origen', 'X Destino', 'Y Destino']],
-        body: verificationBody
+        head: [['Nº', 'X Física', 'Y Física', 'X Catastro', 'Y Catastro', 'X Calc.', 'Y Calc.', 'Error (m)']],
+        body: verificationBody,
+        styles: { fontSize: 8 }, // Reduce font to fit more columns
+        headStyles: { fillGray: 200 }
       });
+
+      currentY = doc.lastAutoTable.finalY + 8;
+      doc.setFontSize(10);
+      doc.text(`Error Máximo Cramer: ${formatZero(maxErrorCramer, 3)} m`, 14, currentY);
+      doc.text(`Error Medio Cramer: ${(totalErrorCramer / ring1.length).toFixed(3)} m`, 14, currentY + 5);
+
+      if (!helmert.errorMsg) {
+        currentY += 15;
+        doc.setFontSize(12);
+        doc.text("Comprobación Mínimos Cuadrados (Matriz Inversa):", 14, currentY);
+
+        const verificationHelmert = [];
+        let totalErrorHelmert = 0;
+        let maxErrorHelmert = 0;
+
+        for (let i = 0; i < ring1.length; i++) {
+          let rx = ring1[i][0];
+          let ry = ring1[i][1];
+
+          let hX = rx * helmert.a - ry * helmert.b + helmert.Tx;
+          let hY = rx * helmert.b + ry * helmert.a + helmert.Ty;
+
+          let destX = ring2[i][0];
+          let destY = ring2[i][1];
+
+          let errDist = Math.hypot(hX - destX, hY - destY);
+          totalErrorHelmert += errDist;
+          if (errDist > maxErrorHelmert) maxErrorHelmert = errDist;
+
+          verificationHelmert.push([
+            (i + 1).toString(),
+            formatZero(rx, 3), formatZero(ry, 3),
+            formatZero(destX, 3), formatZero(destY, 3),
+            formatZero(hX, 3), formatZero(hY, 3),
+            formatZero(errDist, 3)
+          ]);
+        }
+
+        autoTable(doc, {
+          startY: currentY + 5,
+          head: [['Nº', 'X Física', 'Y Física', 'X Catastro', 'Y Catastro', 'X Calc.', 'Y Calc.', 'Error (m)']],
+          body: verificationHelmert,
+          styles: { fontSize: 8 }
+        });
+
+        currentY = doc.lastAutoTable.finalY + 8;
+        doc.setFontSize(10);
+        doc.text(`Error Máximo M. Cuadrados: ${formatZero(maxErrorHelmert, 3)} m`, 14, currentY);
+        doc.text(`Error Medio M. Cuadrados: ${(totalErrorHelmert / ring1.length).toFixed(3)} m`, 14, currentY + 5);
+      }
 
       // --- ADD FOOTERS TO ALL PAGES ---
       const pageCount = doc.internal.getNumberOfPages();
@@ -341,7 +417,7 @@ export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParce
         doc.setPage(i);
         doc.setFontSize(8);
         doc.setTextColor(150);
-        
+
         // Formateado legal/visual
         doc.line(14, pageHeight - 15, pageWidth - 14, pageHeight - 15);
         doc.text("Generado exclusivamente mediante herramienta topográfica online: generador-gml.xyz", 14, pageHeight - 10);
@@ -350,6 +426,67 @@ export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParce
 
       doc.save(`Informe_Desplazamiento_Catastro_${Date.now()}.pdf`);
     }
+  };
+
+  const handleExportExcel = () => {
+    if (!params3P || !realParcel || !adaptedParcel) return;
+
+    const ring1 = getOuterRing(realParcel.originalCoords);
+    const ring2 = getOuterRing(adaptedParcel.originalCoords);
+
+    // 1. Data for Parameters Sheet
+    const paramRows = [
+      { Parametro: 'Metodo', Valor: 'Cramer (3 Puntos)' },
+      { Parametro: 'AX', Valor: params3P.ax },
+      { Parametro: 'BX', Valor: params3P.bx },
+      { Parametro: 'CX', Valor: params3P.cx },
+      { Parametro: 'AY', Valor: params3P.ay },
+      { Parametro: 'BY', Valor: params3P.by },
+      { Parametro: 'CY', Valor: params3P.cy },
+      { Parametro: '', Valor: '' },
+      { Parametro: 'Verificacion (Helmerta)', Valor: '' },
+      { Parametro: 'a', Valor: params3P.helmert.a },
+      { Parametro: 'b', Valor: params3P.helmert.b },
+      { Parametro: 'Tx', Valor: params3P.helmert.Tx },
+      { Parametro: 'Ty', Valor: params3P.helmert.Ty },
+      { Parametro: '', Valor: '' },
+      { Parametro: 'Error Maximo', Valor: params3P.maxErr },
+      { Parametro: 'Error Medio', Valor: params3P.avgErr }
+    ];
+
+    // 2. Data for Vertices Sheet
+    const vertexRows = ring1.map((p, i) => {
+      const rx = p[0];
+      const ry = p[1];
+      const destX = ring2[i][0];
+      const destY = ring2[i][1];
+      // Recalc calc coordinates to ensure they match what's in the state
+      const cxF = params3P.ax * rx + params3P.bx * ry + params3P.cx;
+      const cyF = params3P.ay * rx + params3P.by * ry + params3P.cy;
+      const err = Math.hypot(cxF - destX, cyF - destY);
+
+      return {
+        Punto: i + 1,
+        'X Fisica': rx,
+        'Y Fisica': ry,
+        'X Catastro': destX,
+        'Y Catastro': destY,
+        'X Calculada': cxF,
+        'Y Calculada': cyF,
+        'Error (m)': err
+      };
+    });
+
+    // Create workbook and sheets
+    const wb = XLSX.utils.book_new();
+    const wsParams = XLSX.utils.json_to_sheet(paramRows);
+    const wsVertices = XLSX.utils.json_to_sheet(vertexRows);
+
+    XLSX.utils.book_append_sheet(wb, wsParams, "Parametros");
+    XLSX.utils.book_append_sheet(wb, wsVertices, "Vertices");
+
+    // Save File
+    XLSX.writeFile(wb, `Parametros_Desplazamiento_${realParcel.name}_${Date.now()}.xlsx`);
   };
 
   return (
@@ -363,10 +500,18 @@ export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParce
         <div className="modal-body">
           <div className="tabs" style={{ display: 'flex', gap: '10px', marginBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '10px' }}>
             <button
-              className="btn btn-primary"
+              className={`btn ${activeTab === 1 ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => { setActiveTab(1); resetState(); }}
+              style={{ flex: 1, padding: '10px', fontSize: '0.9rem' }}
+            >
+              1. Extraer Parámetros (PDF)
+            </button>
+            <button
+              className={`btn ${activeTab === 2 ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => { setActiveTab(2); resetState(); }}
               style={{ flex: 1, padding: '10px' }}
             >
-              Ajuste Automágico a Catastro (beta)
+              2. Ajuste Automágico a Catastro (beta)
             </button>
           </div>
 
@@ -411,31 +556,31 @@ export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParce
               </div>
 
               <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', padding: '12px', marginBottom: '15px' }}>
-                 <label style={{ color: '#38bdf8', fontSize: '0.8rem', display: 'block', marginBottom: '10px' }}>Guía Manual Opcional (Desplazamiento inicial del foco)</label>
-                 <div style={{ display: 'flex', gap: '15px' }}>
-                    <div style={{ flex: 1 }}>
-                       <label style={{ fontSize: '0.7rem', color: '#999' }}>Eje X (Este / Oeste) [m]</label>
-                       <input 
-                         type="number" 
-                         step="0.5" 
-                         className="form-control" 
-                         placeholder="Ej. 2.0 (Este)" 
-                         value={manualOffsetX}
-                         onChange={(e) => setManualOffsetX(e.target.value)}
-                       />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                       <label style={{ fontSize: '0.7rem', color: '#999' }}>Eje Y (Norte / Sur) [m]</label>
-                       <input 
-                         type="number" 
-                         step="0.5" 
-                         className="form-control" 
-                         placeholder="Ej. -1.5 (Sur)" 
-                         value={manualOffsetY}
-                         onChange={(e) => setManualOffsetY(e.target.value)}
-                       />
-                    </div>
-                 </div>
+                <label style={{ color: '#38bdf8', fontSize: '0.8rem', display: 'block', marginBottom: '10px' }}>Guía Manual Opcional (Desplazamiento inicial del foco)</label>
+                <div style={{ display: 'flex', gap: '15px' }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: '0.7rem', color: '#999' }}>Eje X (Este / Oeste) [m]</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      className="form-control"
+                      placeholder="Ej. 2.0 (Este)"
+                      value={manualOffsetX}
+                      onChange={(e) => setManualOffsetX(e.target.value)}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: '0.7rem', color: '#999' }}>Eje Y (Norte / Sur) [m]</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      className="form-control"
+                      placeholder="Ej. -1.5 (Sur)"
+                      value={manualOffsetY}
+                      onChange={(e) => setManualOffsetY(e.target.value)}
+                    />
+                  </div>
+                </div>
               </div>
 
               <div style={{ background: 'rgba(56, 189, 248, 0.1)', borderLeft: '3px solid #38bdf8', padding: '10px', fontSize: '0.8rem', color: '#e0f2fe', marginBottom: '15px' }}>
@@ -456,7 +601,7 @@ export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParce
           {activeTab === 1 && (
             <div style={{ maxHeight: '60vh', overflowY: 'auto', paddingRight: '5px' }}>
               <p style={{ fontSize: '0.85rem', color: '#ccc', marginBottom: '15px' }}>
-                Selecciona la geometría física de origen y la adaptada a Catastro. El sistema extraerá de forma automática 3 puntos no colineales mediante Matriz Inversa y exportará un **Informe en PDF** con los parámetros deducidos junto a la comprobación vértice por vértice del ajuste perimetral.
+                Selecciona la geometría física de origen y la adaptada a Catastro. El sistema extraerá de forma automática 3 puntos no colineales mediante Matriz Inversa y exportará un **Informe en PDF** con los parámetros deducidos junto a la comprobación vértice por vértice del ajuste perimetral. Ademas de un fichero excel con los mismos datos para su uso en otros programas.
               </p>
 
               <div className="form-group" style={{ marginBottom: '10px' }}>
@@ -487,11 +632,11 @@ export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParce
                 </select>
               </div>
 
-              <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '15px', flexWrap: 'wrap' }}>
                 <button
                   className="btn btn-secondary"
                   onClick={() => handleRunOption2(false)}
-                  style={{ flex: 1, padding: '10px' }}
+                  style={{ flex: '1 1 100%', padding: '10px' }}
                 >
                   Solo Calcular Parámetros
                 </button>
@@ -501,7 +646,15 @@ export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParce
                   style={{ flex: 1, padding: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                 >
                   <Download size={18} />
-                  Descargar PDF
+                  PDF
+                </button>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleExportExcel}
+                  style={{ flex: 1, padding: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', backgroundColor: '#166534', borderColor: '#15803d' }}
+                >
+                  <Download size={18} />
+                  Excel
                 </button>
               </div>
 
@@ -527,6 +680,32 @@ export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParce
                       <tr><td style={{ border: '1px solid #444', padding: '5px' }}>CY</td><td style={{ border: '1px solid #444', padding: '5px' }}>{formatZero(params3P.cy, 3)}</td></tr>
                     </tbody>
                   </table>
+
+                  <h4 style={{ margin: '15px 0 10px 0', color: 'var(--accent-primary)', fontSize: '0.9rem' }}>COMPROBACIÓN DE RESIDUOS (VÉRTICES)</h4>
+                  <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid #444' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center', fontSize: '0.75rem', backgroundColor: '#1a1a1a', color: '#ccc' }}>
+                      <thead style={{ position: 'sticky', top: 0, backgroundColor: '#333' }}>
+                        <tr>
+                          <th style={{ padding: '4px', border: '1px solid #444' }}>Punto</th>
+                          <th style={{ padding: '4px', border: '1px solid #444' }}>Error (m)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {params3P.residuals.map(r => (
+                          <tr key={r.id}>
+                            <td style={{ border: '1px solid #444', padding: '3px' }}>{r.id}</td>
+                            <td style={{ border: '1px solid #444', padding: '3px', color: r.errDist > 0.05 ? '#ff4d4d' : '#4ade80' }}>
+                              {r.errDist.toFixed(3)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style={{ marginTop: '10px', fontSize: '0.75rem', color: '#ccc', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Error Máximo: <strong style={{ color: params3P.maxErr > 0.05 ? '#ff4d4d' : '#4ade80' }}>{params3P.maxErr.toFixed(3)} m</strong></span>
+                    <span>Error Medio: <strong>{params3P.avgErr.toFixed(3)} m</strong></span>
+                  </div>
                 </div>
               )}
             </div>
@@ -536,9 +715,9 @@ export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParce
             <div className="results-panel glass-card" style={{ marginTop: '20px', padding: '15px', border: '1px solid var(--accent-primary)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                 <h4 style={{ margin: 0, color: 'var(--accent-primary)' }}>Resultados de Traslación/Rotación (Alt. {currentFitIndex + 1}/{fitAlternatives.length})</h4>
-                
+
                 {fitAlternatives.length > 1 && (
-                  <button 
+                  <button
                     onClick={() => applyAlternative((currentFitIndex + 1) % fitAlternatives.length)}
                     style={{ background: 'rgba(56, 189, 248, 0.15)', border: '1px solid #38bdf8', color: '#38bdf8', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '5px' }}
                   >
@@ -546,7 +725,7 @@ export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParce
                   </button>
                 )}
               </div>
-              
+
               <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '0.9rem', lineHeight: '1.6' }}>
                 <li><strong>Desplazamiento X (Tx):</strong> {results.Tx.toFixed(3)} m</li>
                 <li><strong>Desplazamiento Y (Ty):</strong> {results.Ty.toFixed(3)} m</li>
