@@ -7,7 +7,7 @@ import { calculateBbox, calculatePolygonArea, closeRing, transformToWGS84, calcu
 import { fetchParcelsByBbox } from '../utils/cadastreService';
 
 export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParcel }) {
-  const [activeTab, setActiveTab] = useState(1);
+  const [activeTab, setActiveTab] = useState(2);
   const [selectedRealMapId, setSelectedRealMapId] = useState('');
   const [selectedAdaptedId, setSelectedAdaptedId] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -363,18 +363,10 @@ export default function CramerModal({ isOpen, onClose, parcels, huso, onAddParce
         <div className="modal-body">
           <div className="tabs" style={{ display: 'flex', gap: '10px', marginBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '10px' }}>
             <button
-              className={`btn ${activeTab === 1 ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => { setActiveTab(1); resetState(); }}
-              style={{ flex: 1, padding: '10px', fontSize: '0.9rem' }}
-            >
-              1. Extraer Parámetros (PDF)
-            </button>
-            <button
-              className={`btn ${activeTab === 2 ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => { setActiveTab(2); resetState(); }}
+              className="btn btn-primary"
               style={{ flex: 1, padding: '10px' }}
             >
-              2. Ajuste Automágico a Catastro (beta)
+              Ajuste Automágico a Catastro (beta)
             </button>
           </div>
 
