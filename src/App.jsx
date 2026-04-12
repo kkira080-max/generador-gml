@@ -18,6 +18,7 @@ import LinksModal from './components/LinksModal';
 import CramerModal from './components/CramerModal';
 import Toast from './components/Toast';
 import DomainRedirectModal from './components/DomainRedirectModal';
+import HelpModal from './components/HelpModal';
 import { showToast } from './utils/toast';
 import proj4 from 'proj4';
 
@@ -33,6 +34,7 @@ function App() {
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
   const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
   const [isLinksModalOpen, setIsLinksModalOpen] = useState(false);
+  const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
   const [legalModalType, setLegalModalType] = useState('legal'); 
   const [isCramerModalOpen, setIsCramerModalOpen] = useState(false);
   const [buildingQueue, setBuildingQueue] = useState([]); // Kept for future or internal use if needed
@@ -636,6 +638,7 @@ function App() {
         onIncrementStat={incrementStat}
         onOpenSupportModal={() => setIsSupportModalOpen(true)}
         onOpenLinksModal={() => setIsLinksModalOpen(true)}
+        onOpenHelpModal={() => setIsHelpModalOpen(true)}
         onOpenLegalModal={(type) => { setLegalModalType(type); setIsLegalModalOpen(true); }}
         selectedParcelId={selectedParcelId}
         onSelectParcel={handleSelectParcel}
@@ -687,6 +690,7 @@ function App() {
         }}
       />
       <DomainRedirectModal />
+      <HelpModal isOpen={isHelpModalOpen} onClose={() => setIsHelpModalOpen(false)} />
       <Toast />
     </div>
   );

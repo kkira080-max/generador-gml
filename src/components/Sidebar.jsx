@@ -43,6 +43,7 @@ export default function Sidebar({
   onIncrementStat,
   onOpenSupportModal,
   onOpenLinksModal,
+  onOpenHelpModal,
   onOpenLegalModal,
   selectedParcelId,
   onSelectParcel,
@@ -1551,6 +1552,14 @@ export default function Sidebar({
             onMouseOut={(e) => e.target.style.color = 'var(--text-secondary)'}
           >
             Aviso Legal
+          </span>
+          <span
+            onClick={onOpenHelpModal}
+            style={{ cursor: 'pointer', transition: 'color 0.2s' }}
+            onMouseOver={(e) => e.target.style.color = 'var(--accent-primary)'}
+            onMouseOut={(e) => e.target.style.color = 'var(--text-secondary)'}
+          >
+            Ayuda
           </span>
           <span
             onClick={() => onOpenLegalModal('privacy')}
