@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Wrench, Ruler, Square, Crosshair, ChevronLeft, ChevronDown, ChevronRight, ExternalLink, Image } from 'lucide-react';
+import { Wrench, Ruler, Square, Crosshair, ChevronLeft, ChevronDown, ChevronRight, ExternalLink, Image, LocateFixed } from 'lucide-react';
 import { showToast } from '../utils/toast';
 
-export default function MapTools({ onToolChange, activeTool, measurements = {}, areaUnit, setAreaUnit, huso, onSearchCoords, onHusoChange }) {
+export default function MapTools({ onToolChange, activeTool, measurements = {}, areaUnit, setAreaUnit, huso, onSearchCoords, onHusoChange, onGpsLocate, isLocating }) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeMenu, setActiveMenu] = useState(null); // 'mediciones' | 'coordenadas' | 'catastro' | null
 
@@ -110,6 +110,13 @@ export default function MapTools({ onToolChange, activeTool, measurements = {}, 
             <ExternalLink size={16} />
             <span>Visores Externos</span>
             <ChevronRight size={14} className="ml-auto" />
+          </button>
+          
+          <div style={{ height: '1px', background: 'var(--border-color)', margin: '4px 0' }}></div>
+          
+          <button className="menu-item" onClick={() => { setIsOpen(false); onGpsLocate(); }}>
+            <LocateFixed size={16} className={isLocating ? 'animate-pulse' : ''} color={isLocating ? 'var(--accent-primary)' : 'inherit'} />
+            <span style={{ color: isLocating ? 'var(--accent-primary)' : 'inherit' }}>Mi posición (GPS)</span>
           </button>
         </div>
       )}
@@ -282,14 +289,6 @@ export default function MapTools({ onToolChange, activeTool, measurements = {}, 
               >
                 <ExternalLink size={18} style={{ marginRight: 8 }} />
                 {activeTool === 'go_to_cadastre' ? 'Sede Catastro: Pica mapa' : 'Abrir en Catastro'}
-              </button>
-
-              <button
-                className={`tool-btn-full ${activeTool === 'go_to_registradores' ? 'active' : ''}`}
-                onClick={() => handleToolClick('go_to_registradores')}
-              >
-                <Square size={18} style={{ marginRight: 8 }} />
-                {activeTool === 'go_to_registradores' ? 'Registradores: Pica mapa' : 'Geoportal Registradores'}
               </button>
 
               <button

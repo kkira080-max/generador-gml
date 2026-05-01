@@ -13,7 +13,6 @@ export default function LinksModal({ isOpen, onClose }) {
     { name: 'Urbanismo Murcia', url: 'http://urbanismo.murcia.es/infourb/geovisor', desc: 'Planeamiento urbanístico Murcia' },
     { name: 'Ayuntamiento de Murcia', url: 'https://geovisor.murcia.es/', desc: 'Geovisor municipal' },
     { name: 'Notas Simples (Registradores)', url: 'https://sede.registradores.org/sede/sede-corpme-web/home', desc: 'Petición de notas al Registro' },
-    { name: 'Geoportal Registradores', url: 'https://geoportal.registradores.org/geoportal', desc: 'Visor registral de España' },
     { name: 'Zonas Inundables (SNCZI)', url: 'https://sig.miteco.gob.es/snczi/index.html?herramienta=DPHZI', desc: 'Sistema de cartografía de inundabilidad' },
   ];
 

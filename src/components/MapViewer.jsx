@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { History } from 'lucide-react';
+import { History, LocateFixed } from 'lucide-react';
 import L from 'leaflet';
 import proj4 from 'proj4';
 import 'leaflet/dist/leaflet.css';
@@ -38,6 +38,8 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
 }) {
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
+  const [isLocating, setIsLocating] = useState(false);
+  const locationLayerRef = useRef(null);
   const featuresLayer = useRef(null);
   const adjustmentLayers = useRef(new L.LayerGroup());
   const prevAdjustmentSession = useRef(adjustmentSession);
@@ -57,8 +59,58 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
   const activeToolRef = useRef(null);
 
   // Intercept tool changes — alert if HUSO required but not set
+  const handleGpsLocate = () => {
+    if (!mapInstance.current) return;
+    const map = mapInstance.current;
+    
+    setIsLocating(true);
+    
+    // Configurar los eventos de localización una sola vez
+    map.off('locationfound');
+    map.off('locationerror');
+
+    map.on('locationfound', (e) => {
+      setIsLocating(false);
+      const radius = e.accuracy;
+
+      if (locationLayerRef.current) {
+        map.removeLayer(locationLayerRef.current);
+      }
+
+      const locationGroup = L.layerGroup();
+      
+      L.circle(e.latlng, {
+        radius: radius,
+        color: '#38bdf8',
+        fillColor: '#38bdf8',
+        fillOpacity: 0.15,
+        weight: 1
+      }).addTo(locationGroup);
+
+      L.circleMarker(e.latlng, {
+        radius: 6,
+        color: '#fff',
+        fillColor: '#38bdf8',
+        fillOpacity: 1,
+        weight: 2
+      }).addTo(locationGroup);
+
+      locationLayerRef.current = locationGroup;
+      locationGroup.addTo(map);
+      
+      showToast("Ubicación actual encontrada", "success");
+    });
+
+    map.on('locationerror', (e) => {
+      setIsLocating(false);
+      showToast("No se pudo acceder a tu ubicación. Revisa los permisos.", "error");
+    });
+
+    map.locate({ setView: true, maxZoom: 18, enableHighAccuracy: true });
+  };
+
   const handleToolChange = (tool) => {
-    if ((tool === 'coordinates' || tool === 'go_to_cadastre' || tool === 'go_to_registradores' || tool === 'go_to_ortofotos') && !huso) {
+    if ((tool === 'coordinates' || tool === 'go_to_cadastre' || tool === 'go_to_ortofotos') && !huso) {
       if (onHusoRequired) onHusoRequired();
       return;
     }
@@ -261,7 +313,7 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
 
     // Coordinate and Cadastre tool click handler
     const onMapClick = async (e) => {
-      if (activeToolRef.current === 'coordinates' || activeToolRef.current === 'go_to_cadastre' || activeToolRef.current === 'go_to_registradores' || activeToolRef.current === 'go_to_ortofotos') {
+      if (activeToolRef.current === 'coordinates' || activeToolRef.current === 'go_to_cadastre' || activeToolRef.current === 'go_to_ortofotos') {
         const { lat, lng } = e.latlng;
         const epsgCode = `EPSG:${husoRef.current || '25830'}`;
         try {
@@ -284,75 +336,6 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
              } else {
                  showToast("No se ha detectado ninguna parcela del Catastro en las coordenadas indicadas. Intenta hacer clic un poco más al interior de la parcela.", "error");
              }
-             return;
-          }
-
-          if (activeToolRef.current === 'go_to_registradores') {
-             if (!husoRef.current) {
-                 if (onHusoRequired) onHusoRequired();
-                 return;
-             }
-
-             const x = utm[0].toFixed(3);
-             const y = utm[1].toFixed(3);
-             const epsg = husoRef.current || '25830';
-
-             // Intentamos obtener la RC para facilitar la búsqueda en el Geoportal
-             let rc = null;
-             try {
-                rc = await fetchRcByCoordinates(utm[0], utm[1], epsgCode);
-             } catch (err) {
-                console.error("No se pudo obtener la RC para el Geoportal:", err);
-             }
-             
-             const popupContent = `
-               <div style="background: #111; padding: 15px; border-radius: 2px; border-left: 3px solid #38bdf8; width: 260px; font-family: 'Inter', sans-serif;">
-                 <div style="font-size: 0.65rem; color: #38bdf8; font-weight: 800; margin-bottom: 12px; letter-spacing: 0.05em;">ASISTENTE REGISTRADORES</div>
-                 
-                 <div style="background: rgba(255,255,255,0.05); padding: 8px 10px; border-radius: 2px; margin-bottom: 12px; border: 1px solid ${rc ? 'rgba(56, 189, 248, 0.3)' : 'rgba(255,255,255,0.1)'};">
-                   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                     <span style="font-size: 0.55rem; color: rgba(255,255,255,0.4); text-transform: uppercase;">REF. CATASTRAL (RECOMENDADO)</span>
-                     ${rc ? `<button onclick="navigator.clipboard.writeText('${rc}'); this.innerText='✓'; setTimeout(()=>this.innerText='📋', 1000)" 
-                               style="background: #38bdf8; border: none; padding: 2px 6px; border-radius: 2px; color: black; font-weight: bold; cursor: pointer; font-size: 0.6rem;">📋</button>` : ''}
-                   </div>
-                   <span style="font-size: 0.9rem; color: ${rc ? '#38bdf8' : 'rgba(255,255,255,0.3)'}; font-family: monospace; font-weight: 700;">${rc || 'NO DETECTADA'}</span>
-                 </div>
-
-                 <div style="display: flex; gap: 6px; margin-bottom: 6px; align-items: stretch;">
-                   <div style="flex: 1; background: rgba(255,255,255,0.03); padding: 6px 10px; border-radius: 2px;">
-                     <span style="font-size: 0.5rem; color: rgba(255,255,255,0.3); display: block; margin-bottom: 2px; text-transform: uppercase;">Coordenada X</span>
-                     <span style="font-size: 0.8rem; color: white; font-family: monospace;">${x}</span>
-                   </div>
-                   <button onclick="navigator.clipboard.writeText('${x}'); this.innerText='✓'; setTimeout(()=>this.innerText='📋', 1000)" 
-                           style="background: rgba(255,255,255,0.1); border: none; padding: 0 8px; border-radius: 2px; color: white; cursor: pointer;" title="Copiar X">📋</button>
-                 </div>
-
-                 <div style="display: flex; gap: 6px; margin-bottom: 12px; align-items: stretch;">
-                   <div style="flex: 1; background: rgba(255,255,255,0.03); padding: 6px 10px; border-radius: 2px;">
-                     <span style="font-size: 0.5rem; color: rgba(255,255,255,0.3); display: block; margin-bottom: 2px; text-transform: uppercase;">Coordenada Y</span>
-                     <span style="font-size: 0.8rem; color: white; font-family: monospace;">${y}</span>
-                   </div>
-                   <button onclick="navigator.clipboard.writeText('${y}'); this.innerText='✓'; setTimeout(()=>this.innerText='📋', 1000)" 
-                           style="background: rgba(255,255,255,0.1); border: none; padding: 0 8px; border-radius: 2px; color: white; cursor: pointer;" title="Copiar Y">📋</button>
-                 </div>
-                 
-                 <div style="font-size: 0.6rem; color: rgba(255,255,255,0.4); line-height: 1.4; margin-bottom: 12px;">
-                    Copia la <b>RC</b> y pégala en el buscador del Geoportal. Si no funciona, usa las coordenadas con la herramienta de la lupa.
-                 </div>
-
-                 <a href="https://geoportal.registradores.org/geoportal/" target="_blank" 
-                    style="display: block; width: 100%; padding: 10px; background: #38bdf8; color: black; text-align: center; border-radius: 2px; text-decoration: none; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.05em; transition: 0.2s;">ABRIR GEOPORTAL REGISTRADORES</a>
-               </div>
-             `;
-
-             L.popup({
-               maxWidth: 320,
-               className: 'custom-utm-popup'
-             })
-               .setLatLng(e.latlng)
-               .setContent(popupContent)
-               .openOn(initialMap);
-             
              return;
           }
 
@@ -919,6 +902,8 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
     <div style={{ height: '100%', width: '100%', position: 'relative' }}>
       <div ref={mapRef} style={{ height: '100%', width: '100%', zIndex: 1, position: 'relative' }}></div>
       
+
+
       {/* Historical HUD */}
       {isHistoricalLayerActive && (
         <div className="historical-hud">
@@ -939,6 +924,8 @@ export default function MapViewer({ parcels, expandedParcelIds = new Set(), onDr
         huso={huso}
         onSearchCoords={onSearchCoords}
         onHusoChange={onHusoChange}
+        onGpsLocate={handleGpsLocate}
+        isLocating={isLocating}
       />
     </div>
   );
